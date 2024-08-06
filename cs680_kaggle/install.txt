@@ -1,0 +1,7 @@
+conda install anaconda::pandas
+conda install conda-forge::tqdm
+conda install conda-forge::jupyter
+conda install anaconda::scikit-learn
+conda install conda-forge::albumentations
+conda install conda-forge::timm
+pip install torcheval
