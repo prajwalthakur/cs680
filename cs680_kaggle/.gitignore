@@ -2,8 +2,11 @@
 #custom
 /data
 /wandb
-
+*.h5
+*.pkl
+*.npy
 # Datasets
+
 code/model_zoo/pytorch_ipynb/AFAD-Lite/
 code/model_zoo/pytorch_ipynb/tarball-lite/
 code/model_zoo/pytorch_ipynb/tarball
