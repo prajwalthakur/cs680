@@ -55,11 +55,11 @@ class Config():
     BASE_DIR = os.path.join(os.getcwd() , 'data')
     train_df = pd.read_csv(BASE_DIR  +  '/train.csv')
     TRAIN_VAL_SPLIT_SIZE = 0.14
-    TRAIN_BATCH_SIZE = 32
-    VAL_BATCH_SIZE = 32
+    TRAIN_BATCH_SIZE = 4
+    VAL_BATCH_SIZE =4
     LR_MAX = 1e-4 
     NUM_EPOCHS = 7
-    TIM_NUM_CLASS =512 # 768 swin
+    TIM_NUM_CLASS =6 # 768 swin
     NORMALIZE_TARGET = "log_transform_mean_std"   #"log_transform" #
     RANDOM_NUMBER = 42
     NUM_FLODS  = 5
@@ -446,7 +446,7 @@ train_dataloader = DataLoader(
     batch_size=CONFIG.TRAIN_BATCH_SIZE,
     shuffle=True,
     drop_last=True,
-    num_workers=psutil.cpu_count(),
+    num_workers=  0 #psutil.cpu_count(),
 )
 
 validation_dataloader = DataLoader(
@@ -454,7 +454,7 @@ validation_dataloader = DataLoader(
     batch_size=CONFIG.VAL_BATCH_SIZE,
     shuffle=False,
     drop_last=False,
-    num_workers=psutil.cpu_count(),
+    num_workers= 0 #psutil.cpu_count(),
 )
 
 test_dataset = create_dataset(
@@ -469,7 +469,7 @@ test_dataloader = DataLoader(
     batch_size=1,
     shuffle=False,
     drop_last=False,
-    num_workers=psutil.cpu_count(),
+    num_workers= 0 #psutil.cpu_count(),
 )
 
 # %%
@@ -518,7 +518,7 @@ class ImageBackbone_dinoV2(nn.Module):
     def __init__(self, backbone_name, weight_path, out_features, fixed_feature_extractor=None):
         super().__init__()
         self.out_features = out_features
-        self.backbone = timm.create_model('vit_large_patch14_dinov2.lvd142m', pretrained=True, num_classes=out_features) #remove classifier nn.Linear
+        self.backbone = timm.create_model('vit_large_patch14_dinov2.lvd142m', pretrained=True, num_classes=6) #remove classifier nn.Linear
         #self.backbone = backbone_.forward_head(backbone_, pre_logits=True)
         in_features = self.backbone.num_features
         
@@ -649,7 +649,7 @@ elif CONFIG.TIM_MODEL_NAME == "dinoV2":
 # optimizer
 import torcheval.metrics
 import torcheval.metrics.regression
-
+import torchmetrics
 
 optimizer = torch.optim.AdamW(
     params=model.parameters(),
@@ -685,8 +685,8 @@ class AverageMeter(object):
         self.avg = self.sum / self.count
         
 MSE = torcheval.metrics.regression.MeanSquaredError().to(DEVICE)
-R2sc = torcheval.metrics.regression.R2Score(num_regressors=len(CONFIG.TRAITS_NAME) , multioutput="uniform_average").to(DEVICE)
-R2sc_val = torcheval.metrics.regression.R2Score(num_regressors=len(CONFIG.TRAITS_NAME) , multioutput="uniform_average").to(DEVICE)
+R2sc = torchmetrics.regression.R2Score(num_outputs=len(CONFIG.TRAITS_NAME) , multioutput="uniform_average").to(DEVICE)
+R2sc_val = torchmetrics.regression.R2Score(num_outputs=len(CONFIG.TRAITS_NAME) , multioutput="uniform_average").to(DEVICE)
 MSE_val = torcheval.metrics.regression.MeanSquaredError().to(DEVICE)
 LOSS = AverageMeter()
 LOSS_val = AverageMeter()
@@ -728,6 +728,7 @@ def train_batch(inputs,model):
         y = y.to(DEVICE)
         z = z.to(DEVICE)
         y_pred = model(x,z)        
+        print("pred-size=",y_pred.size)
         
     else:
         x,y = inputs
