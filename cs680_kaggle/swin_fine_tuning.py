@@ -35,7 +35,7 @@ torch.manual_seed(RANDOM_NUMBER)
 # # select Device
 
 # %%
-DEVICE = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else  "cpu") #"cuda:1" if torch.cuda.is_available() else 
 DATA_DIRECTORY = os.path.join(os.getcwd(),"data")
 torch.cuda.empty_cache()
 
@@ -55,8 +55,8 @@ class Config():
     BASE_DIR = os.path.join(os.getcwd() , 'data')
     train_df = pd.read_csv(BASE_DIR  +  '/train.csv')
     TRAIN_VAL_SPLIT_SIZE = 0.14
-    TRAIN_BATCH_SIZE = 4
-    VAL_BATCH_SIZE =4
+    TRAIN_BATCH_SIZE = 126
+    VAL_BATCH_SIZE = 128
     LR_MAX = 1e-4 
     NUM_EPOCHS = 7
     TIM_NUM_CLASS =6 # 768 swin
@@ -67,7 +67,7 @@ class Config():
     TRAITS_NAME = ['X4_mean', 'X11_mean', 'X18_mean', 'X26_mean', 'X50_mean', 'X3112_mean' ]
     FOLD = 0 # Which fold to set as validation data
     IMAGE_SIZE =128
-    TARGET_IMAGE_SIZE =  518
+    TARGET_IMAGE_SIZE =  224
     T_MAX =        9
     LR_MODE = "step" # LR scheduler mode from one of "cos", "step", "exp"
     torch.manual_seed(RANDOM_NUMBER)
@@ -75,7 +75,7 @@ class Config():
     EXTRA_FEATURES_NORMALIZATION = "standard_scalar"  #"min_max_normalization"  #
     WEIGHT_DECAY = 0.01
     TABULAR_NN_OUTPUT  = 256
-    TIM_MODEL_NAME = "dinoV2" #"swin_large" #"efficientnet_v2" # 
+    TIM_MODEL_NAME = "swin_large" #"swin_large" #"efficientnet_v2" # 
     TIMM_FINED_TUNED_WEIGHT = f'{BASE_DIR}/model_08_ensemble.pth'
     Lower_Quantile = 0.005
     Upper_Quantile = 0.975  #0.985
@@ -288,7 +288,7 @@ CONFIG = Config()
 
 # %%
 wandb.login()
-wandb.init(project="cs680v3",group="dinoV2_net_baseline_selected_features",name="dinoV2_selected_features_config_changed",
+wandb.init(project="cs680v3",group="swin_net_baseline_selected_features",name="swin_fine_tuning",
     config = {
     "LR_max": CONFIG.LR_MAX,
     "WEIGHT_DECAY":CONFIG.WEIGHT_DECAY,
@@ -322,7 +322,7 @@ scaling_pipeline = Pipeline(steps=[
 # %%
 # preparing the tabular data that has been given 
 BASE_DIR = os.path.join(os.getcwd() , 'data')
-Train_DF = pd.read_csv(BASE_DIR  +  '/train.csv')
+Train_DF = pd.read_csv(BASE_DIR  +  '/train.csv')  #.iloc[:-10000]
 Test_DF =  pd.read_csv(BASE_DIR  +  '/test.csv')
 Test_DF[log_tf_col] =1
 
@@ -489,31 +489,41 @@ fig.tight_layout()
 # # Define the Image Backbone and Tabular Model
 
 # %%
+# class ImageBackbone_swin(nn.Module):
+#     def __init__(self, backbone_name, weight_path, out_features, fixed_feature_extractor=False):
+#         super().__init__()
+#         self.out_features = out_features
+#         self.backbone = timm.create_model('swin_tiny_patch4_window7_224.ms_in22k', pretrained=False, num_classes=CONFIG.N_TARGETS)
+#         #self.backbone.load_state_dict(torch.load(weight_path))
+#         if fixed_feature_extractor:
+#             for param in self.backbone.parameters():
+#                 param.requires_grad = False
+#         in_features = self.backbone.num_features
+        
+#         self.backbone.head = nn.Identity()
+#         self.head = nn.Sequential(
+#             nn.AdaptiveAvgPool2d(1),
+#             nn.Flatten(),
+#             nn.Linear(in_features, out_features),
+#         )
+
+#     def forward(self, x):
+#         x = self.backbone(x)
+#         #print(x.shape)
+#         x = x.permute(0, 3, 1, 2)
+#         return self.head(x)
+    
 class ImageBackbone_swin(nn.Module):
-    def __init__(self, backbone_name, weight_path, out_features, fixed_feature_extractor=False):
+    def __init__(self, backbone_name, weight_path, out_features, fixed_feature_extractor=None):
         super().__init__()
         self.out_features = out_features
-        self.backbone = timm.create_model('swin_large_patch4_window12_384.ms_in22k_ft_in1k', pretrained=False, num_classes=CONFIG.N_TARGETS)
-        #self.backbone.load_state_dict(torch.load(weight_path))
-        if fixed_feature_extractor:
-            for param in self.backbone.parameters():
-                param.requires_grad = False
+        self.backbone = timm.create_model('swin_tiny_patch4_window7_224.ms_in22k', pretrained=True, num_classes=6) #remove classifier nn.Linear
+        #self.backbone = backbone_.forward_head(backbone_, pre_logits=True)
         in_features = self.backbone.num_features
         
-        self.backbone.head = nn.Identity()
-        self.head = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),
-            nn.Flatten(),
-            nn.Linear(in_features, out_features),
-        )
-
     def forward(self, x):
         x = self.backbone(x)
-        #print(x.shape)
-        x = x.permute(0, 3, 1, 2)
-        return self.head(x)
-    
-    
+        return x  
 class ImageBackbone_dinoV2(nn.Module):
     def __init__(self, backbone_name, weight_path, out_features, fixed_feature_extractor=None):
         super().__init__()
@@ -560,9 +570,9 @@ def initialize_timm_model( model_name   , tim_num_class=0.0, fine_tuned_weight =
         if fine_tuned_weight!=None:
             model = ImageBackbone_swin(model_name,fine_tuned_weight , tim_num_class,fixed_feature_extractor)
         else:
-            model = timm.create_model('swin_large_patch4_window12_384.ms_in22k_ft_in1k',pretrained=True, num_classes = tim_num_class)
+            model = ImageBackbone_swin(model_name,fine_tuned_weight , tim_num_class,fixed_feature_extractor)
             #model.load_state_dict(torch.load(weight_path))
-            model.head.drop = nn.Dropout(p=0.1,inplace=False)
+            #model.head.drop = nn.Dropout(p=0.1,inplace=False)
         return model
     if model_name =="convnextv2":
         model = timm.create_model('convnext_tiny.in12k_ft_in1k_384',num_classes=tim_num_class)
@@ -621,8 +631,6 @@ class BestModelSaveCallback:
 
 
 # %%
-CONFIG.TIM_MODEL_NAME = "dinoV2"
-
 if CONFIG.TIM_MODEL_NAME == "swin_large":
     if CONFIG.INCLUDE_EXTRA_FEATURES:
         model = CustomModel(input_channels = len(CONFIG.EXTRA_COLOUMN) ,out_channels =CONFIG.TABULAR_NN_OUTPUT, target_features_num= len(CONFIG.TRAITS_NAME), tim_num_class=CONFIG.TIM_NUM_CLASS , model_name=CONFIG.TIM_MODEL_NAME)
@@ -728,7 +736,7 @@ def train_batch(inputs,model):
         y = y.to(DEVICE)
         z = z.to(DEVICE)
         y_pred = model(x,z)        
-        print("pred-size=",y_pred.size)
+        #print("pred-size=",y_pred.size)
         
     else:
         x,y = inputs
@@ -865,7 +873,7 @@ def train(trainLoader,valLoader,model,num_epochs,best_model_callback):
 
 # %%
 
-MODEL_NAME_SAVE = 'dino_v2_fine_tuning.pth'
+MODEL_NAME_SAVE = 'swin_small_fine_tuning.pth'
 best_model_callback = BestModelSaveCallback(save_path=os.path.join(CONFIG.BASE_DIR,MODEL_NAME_SAVE))
 train_losses, val_losses , train_accuracies,val_accuracies = train(train_dataloader,validation_dataloader,model,CONFIG.NUM_EPOCHS,best_model_callback)
 

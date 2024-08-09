@@ -76,7 +76,7 @@ class Config():
     WEIGHT_DECAY = 0.01
     TABULAR_NN_OUTPUT  = 256
     TIM_MODEL_NAME = "swin_large" #"efficientnet_v2" # 
-    TIMM_FINED_TUNED_WEIGHT = f'{BASE_DIR}/model_08_ensemble.pth'
+    TIMM_FINED_TUNED_WEIGHT = f'{BASE_DIR}/swin_small_fine_tuning.pth'
     Lower_Quantile = 0.005
     Upper_Quantile = 0.98 #0.985
     # use XGBBOOST to find prominant features
@@ -504,8 +504,8 @@ class ImageBackbone_swin(nn.Module):
     def __init__(self, backbone_name, weight_path, out_features, fixed_feature_extractor=False):
         super().__init__()
         self.out_features = out_features
-        self.backbone =timm.create_model('swin_tiny_patch4_window7_224.ms_in22k', pretrained=True, num_classes=CONFIG.N_TARGETS) # timm.create_model('swin_large_patch4_window12_384.ms_in22k_ft_in1k', pretrained=True, num_classes=CONFIG.N_TARGETS)
-        #self.backbone.load_state_dict(torch.load(weight_path))
+        self.backbone =timm.create_model('swin_tiny_patch4_window7_224.ms_in22k', pretrained=False, num_classes=CONFIG.N_TARGETS) # timm.create_model('swin_large_patch4_window12_384.ms_in22k_ft_in1k', pretrained=True, num_classes=CONFIG.N_TARGETS)
+        self.backbone.load_state_dict(torch.load(weight_path))
         if fixed_feature_extractor:
             for param in self.backbone.parameters():
                 param.requires_grad = False
@@ -585,7 +585,7 @@ def initialize_timm_model( model_name   , tim_num_class=0.0, fine_tuned_weight =
         if fine_tuned_weight!=None:
             model = ImageBackbone_swin(model_name,fine_tuned_weight , tim_num_class,fixed_feature_extractor)
         else:
-            model = timm.create_model('swin_large_patch4_window12_384.ms_in22k_ft_in1k',pretrained=True, num_classes = tim_num_class)
+            model = None #timm.create_model('swin_large_patch4_window12_384.ms_in22k_ft_in1k',pretrained=True, num_classes = tim_num_class)
             #model.load_state_dict(torch.load(weight_path))
             model.head.drop = nn.Dropout(p=0.1,inplace=False)
         return model
@@ -610,7 +610,7 @@ def initialize_timm_model( model_name   , tim_num_class=0.0, fine_tuned_weight =
 class CustomModel(nn.Module):
     def __init__(self,input_channels,out_channels, target_features_num , tim_num_class , model_name):
         super().__init__()
-        self.img_backbone = initialize_timm_model(model_name=model_name ,tim_num_class=tim_num_class , fine_tuned_weight = CONFIG.TIMM_FINED_TUNED_WEIGHT,fixed_feature_extractor=False)
+        self.img_backbone = initialize_timm_model(model_name=model_name ,tim_num_class=tim_num_class , fine_tuned_weight = CONFIG.TIMM_FINED_TUNED_WEIGHT,fixed_feature_extractor=True)
         self.extra_features_model = TabularBackbone(n_features  = len(CONFIG.EXTRA_COLOUMN) , out_features=64)
         self.fc = nn.Sequential(
             nn.Linear(self.extra_features_model.out_features + self.img_backbone.out_features, 256),  #1024

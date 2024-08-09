@@ -1,1 +1,3 @@
-nohup python efficient_net_all_features.py  > /home/prajwal/cs680/cs680_kaggle/exp2_log.out &
+nohup python dinoV2_fine_tuning.py  > /home/prajwal/cs680/cs680_kaggle/exp2_log.out &
+ps -u prajwal
+top -U prajwal
