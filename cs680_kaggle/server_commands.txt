@@ -1,0 +1,1 @@
+nohup python efficient_net_all_features.py  > /home/prajwal/cs680/cs680_kaggle/exp2_log.out &
