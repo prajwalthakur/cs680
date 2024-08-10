@@ -55,10 +55,11 @@ class Config():
     BASE_DIR = os.path.join(os.getcwd() , 'data')
     train_df = pd.read_csv(BASE_DIR  +  '/train.csv')
     TRAIN_VAL_SPLIT_SIZE = 0.14
-    TRAIN_BATCH_SIZE = 10
+    TRAIN_BATCH_SIZE =10
     VAL_BATCH_SIZE = 10
+    TEST_BATCH_SIZE  = 10
     LR_MAX = 1e-4 
-    NUM_EPOCHS = 7
+    NUM_EPOCHS = 10
     TIM_NUM_CLASS =6 # 768 swin
     NORMALIZE_TARGET = "log_transform_mean_std"   #"log_transform" #
     RANDOM_NUMBER = 42
@@ -382,13 +383,13 @@ STD = [0.229, 0.224, 0.225]
 TRAIN_TRANSFORMS = A.Compose([
     A.Resize(CONFIG.TARGET_IMAGE_SIZE, CONFIG.TARGET_IMAGE_SIZE),
     A.RandomCrop(width=CONFIG.TARGET_IMAGE_SIZE, height=CONFIG.TARGET_IMAGE_SIZE),  # Simulate different crops
-    A.HorizontalFlip(p=0.5),  # Simulate left-right flips
-    A.VerticalFlip(p=0.5),  # Simulate up-down flips
-    A.RandomBrightnessContrast(brightness_limit=(-0.2, 0.2), contrast_limit=(-0.2, 0.2), p=0.5),  # Adjust brightness and contrast
-    A.RandomRotate90(p=0.5),  # Simulate different rotations
+    A.HorizontalFlip(p=0.1),  # Simulate left-right flips
+    A.VerticalFlip(p=0.1),  # Simulate up-down flips
+    A.RandomBrightnessContrast(brightness_limit=(-0.2, 0.2), contrast_limit=(-0.2, 0.2), p=0.2),  # Adjust brightness and contrast
+    A.RandomRotate90(p=0.2),  # Simulate different rotations
     A.GaussianBlur(blur_limit=(3, 7), p=0.1),  # Introduce slight blur
-    A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.1, rotate_limit=15, p=0.5),  # Combine shift, scale, and rotation
-    A.HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20, p=0.5),  # Adjust hue, saturation, and value
+    A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.1, rotate_limit=15, p=0.2),  # Combine shift, scale, and rotation
+    A.HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20, p=0.2),  # Adjust hue, saturation, and value
     A.ToFloat(),
     A.Normalize(mean=MEAN, std=STD, max_pixel_value=1),
     ToTensorV2(),
@@ -466,7 +467,7 @@ test_dataset = create_dataset(
 
 test_dataloader = DataLoader(
     test_dataset,
-    batch_size=1,
+    batch_size=CONFIG.TEST_BATCH_SIZE,
     shuffle=False,
     drop_last=False,
     num_workers= 0 #psutil.cpu_count(),

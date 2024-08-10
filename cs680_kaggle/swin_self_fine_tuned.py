@@ -57,7 +57,7 @@ class Config():
     TRAIN_VAL_SPLIT_SIZE = 0.14
     TRAIN_BATCH_SIZE = 128
     VAL_BATCH_SIZE = 128
-    LR_MAX = 7e-4 
+    LR_MAX = 1e-4 
     NUM_EPOCHS = 20
     TIM_NUM_CLASS = 768 #vit : 512  # swin  
     NORMALIZE_TARGET = "log_transform_mean_std"   #"log_transform" #
