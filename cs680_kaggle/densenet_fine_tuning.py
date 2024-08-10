@@ -289,13 +289,13 @@ CONFIG = Config()
 
 
 # %%
-wandb.login()
-wandb.init(project="cs680v3",group="densenet",name="edensenet_fine_tuning",
-    config = {
-    "LR_max": CONFIG.LR_MAX,
-    "WEIGHT_DECAY":CONFIG.WEIGHT_DECAY,
-    "train_batch" : CONFIG.TRAIN_BATCH_SIZE
-    })
+# wandb.login()
+# wandb.init(project="cs680v3",group="densenet",name="edensenet_fine_tuning",
+#     config = {
+#     "LR_max": CONFIG.LR_MAX,
+#     "WEIGHT_DECAY":CONFIG.WEIGHT_DECAY,
+#     "train_batch" : CONFIG.TRAIN_BATCH_SIZE
+#     })
 
 # %% [markdown]
 # # Preprocessing the Tabular Data And Image Transformation
@@ -719,13 +719,15 @@ class BestModelSaveCallback:
 
 # %%
 
-MODEL_NAME_SAVE = 'denseNet_fine_tuned.pth'
-best_model_callback = BestModelSaveCallback(save_path=os.path.join(CONFIG.BASE_DIR,MODEL_NAME_SAVE))
-train_losses, val_losses , train_accuracies,val_accuracies = train(train_dataloader,validation_dataloader,model,CONFIG.NUM_EPOCHS,best_model_callback)
+# MODEL_NAME_SAVE = 'denseNet_fine_tuned.pth'
+# best_model_callback = BestModelSaveCallback(save_path=os.path.join(CONFIG.BASE_DIR,MODEL_NAME_SAVE))
+# train_losses, val_losses , train_accuracies,val_accuracies = train(train_dataloader,validation_dataloader,model,CONFIG.NUM_EPOCHS,best_model_callback)
 
 # %%
-
+model = torch.load('/home/prajwal/cs680/cs680_kaggle/data/denseNet_fine_tuned.pth')
+model.to(DEVICE)
 model.eval()
+submission_df = pd.DataFrame(columns=CONFIG.TRAITS_NAME)
 for index , batch in tqdm.tqdm(enumerate(iter(test_dataloader))):
     X_img_test = batch[0] 
     X_features  = batch[1]
@@ -733,7 +735,7 @@ for index , batch in tqdm.tqdm(enumerate(iter(test_dataloader))):
     #print(batch) 
     with torch.no_grad():
         #print(X_img_test.shape, X_features.shape)
-        y_pred = model(X_img_test.to(DEVICE),X_features.to(DEVICE)).detach().cpu().numpy()  #,X_features.to(DEVICE)
+        y_pred = model(X_img_test.to(DEVICE)).detach().cpu().numpy()  #,X_features.to(DEVICE)
     
         pred_pd = pd.DataFrame(columns=CONFIG.EXTRA_COLOUMN + CONFIG.TRAITS_NAME)
         pred_pd[CONFIG.EXTRA_COLOUMN] =-1

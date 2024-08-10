@@ -585,9 +585,6 @@ def initialize_timm_model( model_name   , tim_num_class=0.0, fine_tuned_weight =
         return model
 
 
-# tm_model = initialize_timm_model("swin_large",tim_num_class=CONFIG.TIM_NUM_CLASS)
-# data_config = timm.data.resolve_model_data_config(tm_model)
-# transforms = timm.data.create_transform(**data_config, is_training=True)
 
 
 # %%
@@ -612,18 +609,9 @@ class BestModelSaveCallback:
 
 
 # %%
-if CONFIG.TIM_MODEL_NAME == "swin_large":
-    if CONFIG.INCLUDE_EXTRA_FEATURES:
-        model = CustomModel(input_channels = len(CONFIG.EXTRA_COLOUMN) ,out_channels =CONFIG.TABULAR_NN_OUTPUT, target_features_num= len(CONFIG.TRAITS_NAME), tim_num_class=CONFIG.TIM_NUM_CLASS , model_name=CONFIG.TIM_MODEL_NAME)
-    else:
-        model = initialize_timm_model(model_name=CONFIG.TIM_MODEL_NAME , tim_num_class = len(CONFIG.TRAITS_NAME) )    
-    model.to(device = DEVICE)
-elif CONFIG.TIM_MODEL_NAME == "dinoV2":
-    if CONFIG.INCLUDE_EXTRA_FEATURES:
-        model = CustomModel(input_channels = len(CONFIG.EXTRA_COLOUMN) ,out_channels =CONFIG.TABULAR_NN_OUTPUT, target_features_num= len(CONFIG.TRAITS_NAME), tim_num_class=CONFIG.TIM_NUM_CLASS , model_name=CONFIG.TIM_MODEL_NAME)
-    else:
-        model = initialize_timm_model(model_name=CONFIG.TIM_MODEL_NAME , tim_num_class = len(CONFIG.TRAITS_NAME) )    
-    model.to(device = DEVICE)
+
+model = CustomModel(input_channels = len(CONFIG.EXTRA_COLOUMN) ,out_channels =CONFIG.TABULAR_NN_OUTPUT, target_features_num= len(CONFIG.TRAITS_NAME), tim_num_class=CONFIG.TIM_NUM_CLASS , model_name=CONFIG.TIM_MODEL_NAME)
+
 
 
 # %%
