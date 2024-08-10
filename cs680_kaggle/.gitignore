@@ -6,6 +6,7 @@
 *.pkl
 *.npy
 *.out
+*.pth
 # Datasets
 
 code/model_zoo/pytorch_ipynb/AFAD-Lite/
