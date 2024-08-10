@@ -288,7 +288,7 @@ CONFIG = Config()
 
 # %%
 wandb.login()
-wandb.init(project="cs680v3",group="dinoV2_net_baseline_selected_features",name="swin_pretrained_no_finetuned_standard_scalar_chnage_config2_added_augmentation",
+wandb.init(project="cs680v3",group="swin_tf",name="swin_small_self_fine_tuned",
         config = {
     "LR_max": CONFIG.LR_MAX,
     "WEIGHT_DECAY":CONFIG.WEIGHT_DECAY,
@@ -884,7 +884,7 @@ def train(trainLoader,valLoader,model,num_epochs,best_model_callback):
 
 # %%
 
-MODEL_NAME_SAVE = 'swin_pretrained_no_finetuned_change_parameters.pth'
+MODEL_NAME_SAVE = 'swin_small_self_fine_tuned.pth'
 best_model_callback = BestModelSaveCallback(save_path=os.path.join(CONFIG.BASE_DIR,MODEL_NAME_SAVE))
 train_losses, val_losses , train_accuracies,val_accuracies = train(train_dataloader,validation_dataloader,model,CONFIG.NUM_EPOCHS,best_model_callback)
 

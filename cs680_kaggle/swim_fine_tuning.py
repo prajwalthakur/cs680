@@ -55,8 +55,8 @@ class Config():
     BASE_DIR = os.path.join(os.getcwd() , 'data')
     train_df = pd.read_csv(BASE_DIR  +  '/train.csv')
     TRAIN_VAL_SPLIT_SIZE = 0.14
-    TRAIN_BATCH_SIZE = 126
-    VAL_BATCH_SIZE = 128
+    TRAIN_BATCH_SIZE = 10
+    VAL_BATCH_SIZE = 10
     LR_MAX = 1e-4 
     NUM_EPOCHS = 7
     TIM_NUM_CLASS =6 # 768 swin
@@ -67,7 +67,7 @@ class Config():
     TRAITS_NAME = ['X4_mean', 'X11_mean', 'X18_mean', 'X26_mean', 'X50_mean', 'X3112_mean' ]
     FOLD = 0 # Which fold to set as validation data
     IMAGE_SIZE =128
-    TARGET_IMAGE_SIZE =  224
+    TARGET_IMAGE_SIZE =  384
     T_MAX =        9
     LR_MODE = "step" # LR scheduler mode from one of "cos", "step", "exp"
     torch.manual_seed(RANDOM_NUMBER)
@@ -288,7 +288,7 @@ CONFIG = Config()
 
 # %%
 wandb.login()
-wandb.init(project="cs680v3",group="swin_net_baseline_selected_features",name="swin_fine_tuning",
+wandb.init(project="cs680v3",group="swin_net_baseline_selected_features",name="swim_large_fine_tuning",
     config = {
     "LR_max": CONFIG.LR_MAX,
     "WEIGHT_DECAY":CONFIG.WEIGHT_DECAY,
@@ -517,7 +517,7 @@ class ImageBackbone_swin(nn.Module):
     def __init__(self, backbone_name, weight_path, out_features, fixed_feature_extractor=None):
         super().__init__()
         self.out_features = out_features
-        self.backbone = timm.create_model('swin_tiny_patch4_window7_224.ms_in22k', pretrained=True, num_classes=6) #remove classifier nn.Linear
+        self.backbone = timm.create_model('swin_large_patch4_window12_384.ms_in22k_ft_in1k', pretrained=True, num_classes=6) #remove classifier nn.Linear
         #self.backbone = backbone_.forward_head(backbone_, pre_logits=True)
         in_features = self.backbone.num_features
         
@@ -567,12 +567,10 @@ def initialize_timm_model( model_name   , tim_num_class=0.0, fine_tuned_weight =
         model = timm.create_model('swin_tiny_patch4_window7_224.ms_in22k' , pretrained=True , num_classes = tim_num_class)
         return model 
     if model_name == "swin_large":
-        if fine_tuned_weight!=None:
-            model = ImageBackbone_swin(model_name,fine_tuned_weight , tim_num_class,fixed_feature_extractor)
-        else:
-            model = ImageBackbone_swin(model_name,fine_tuned_weight , tim_num_class,fixed_feature_extractor)
-            #model.load_state_dict(torch.load(weight_path))
-            #model.head.drop = nn.Dropout(p=0.1,inplace=False)
+
+        model = ImageBackbone_swin(model_name,fine_tuned_weight , tim_num_class,fixed_feature_extractor)
+
+        #model.head.drop = nn.Dropout(p=0.1,inplace=False)
         return model
     if model_name =="convnextv2":
         model = timm.create_model('convnext_tiny.in12k_ft_in1k_384',num_classes=tim_num_class)
@@ -595,27 +593,9 @@ def initialize_timm_model( model_name   , tim_num_class=0.0, fine_tuned_weight =
 class CustomModel(nn.Module):
     def __init__(self,input_channels,out_channels, target_features_num , tim_num_class , model_name):
         super().__init__()
-        self.img_backbone = initialize_timm_model(model_name=model_name ,tim_num_class=tim_num_class , fine_tuned_weight = CONFIG.TIMM_FINED_TUNED_WEIGHT,fixed_feature_extractor=None)
-        #self.extra_features_model = TabularBackbone(n_features  = len(CONFIG.EXTRA_COLOUMN) , out_features=128)
-        # self.fc = self.img_backbone.out_features #nn.Sequential(
-        #     nn.Linear(self.extra_features_model.out_features + self.img_backbone.out_features, 512),
-        #     nn.BatchNorm1d(512),
-        #     nn.GELU(),
-        #     #nn.Dropout(0.1),
-        #     nn.Linear(512, 256),
-        #     nn.BatchNorm1d(256),
-        #     nn.GELU(),
-        #     nn.Dropout(0.1),
-        #     nn.Linear(256, 128 ),
-        #     nn.BatchNorm1d(128),
-        #     nn.GELU(),
-        #     nn.Linear(128 ,target_features_num)
-        # )        
+        self.img_backbone = initialize_timm_model(model_name=model_name ,tim_num_class=tim_num_class , fine_tuned_weight = CONFIG.TIMM_FINED_TUNED_WEIGHT,fixed_feature_extractor=None)      
     def forward(self,image,x):
         output = self.img_backbone(image) # bach * (hight*col)
-        # z = self.extra_features_model(x) # batch * 16
-        # inputs  = torch.cat((output_image,z), 1 )
-        # output = self.fc(inputs)
         return output
 class BestModelSaveCallback:
     def __init__(self, save_path):
@@ -873,13 +853,33 @@ def train(trainLoader,valLoader,model,num_epochs,best_model_callback):
 
 # %%
 
-MODEL_NAME_SAVE = 'swin_small_fine_tuning.pth'
+MODEL_NAME_SAVE = 'swin_large_fine_tuning.pth'
 best_model_callback = BestModelSaveCallback(save_path=os.path.join(CONFIG.BASE_DIR,MODEL_NAME_SAVE))
 train_losses, val_losses , train_accuracies,val_accuracies = train(train_dataloader,validation_dataloader,model,CONFIG.NUM_EPOCHS,best_model_callback)
 
 # %%
 
+model.eval()
+for index , batch in tqdm.tqdm(enumerate(iter(test_dataloader))):
+    X_img_test = batch[0] 
+    X_features  = batch[1]
+    test_id  = batch[2]
+    #print(batch) 
+    with torch.no_grad():
+        #print(X_img_test.shape, X_features.shape)
+        y_pred = model(X_img_test.to(DEVICE)).detach().cpu().numpy()  #,X_features.to(DEVICE)
+    
+        pred_pd = pd.DataFrame(columns=CONFIG.EXTRA_COLOUMN + CONFIG.TRAITS_NAME)
+        pred_pd[CONFIG.EXTRA_COLOUMN] =-1
+        pred_pd[CONFIG.TRAITS_NAME] = y_pred 
 
+        temp1 =   scaling_pipeline['std_scale']['scale'].inverse_transform(pred_pd)
+        temp2=    pd.DataFrame(temp1, columns=CONFIG.EXTRA_COLOUMN + CONFIG.TRAITS_NAME)
+        pred_final =   scaling_pipeline['log']['log'].inverse_transform(temp2[CONFIG.TRAITS_NAME])
+        #pred_final["id"] = test_id.cpu().detach().numpy()
+        submission_df = pd.concat([submission_df, pred_final.assign(id=test_id.cpu().detach().numpy())], ignore_index=True)
+submission_df.to_csv('submission_self_tuning.csv', index=False)
+print("Submit!")
 # %%
 
 

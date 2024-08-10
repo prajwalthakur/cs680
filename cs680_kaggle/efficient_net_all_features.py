@@ -344,7 +344,7 @@ CONFIG = Config()
 
 # %%
 wandb.login()
-wandb.init(project="cs680v3",group="efficient_net_baseline_all_features",name="selected_features_xgboost")
+wandb.init(project="cs680v3",group="efficient_net_baseline_all_features",name="test")
 
 # %% [markdown]
 # # Preprocessing the Tabular Data And Image Transformation
