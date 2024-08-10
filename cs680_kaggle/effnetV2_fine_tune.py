@@ -1,4 +1,5 @@
 # %%
+# %%
 
 import pandas as pd
 import os
@@ -35,7 +36,7 @@ torch.manual_seed(RANDOM_NUMBER)
 # # select Device
 
 # %%
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else  "cpu") #"cuda:1" if torch.cuda.is_available() else 
+DEVICE = torch.device("cuda:1" if torch.cuda.is_available() else  "cpu") #"cuda:1" if torch.cuda.is_available() else 
 DATA_DIRECTORY = os.path.join(os.getcwd(),"data")
 torch.cuda.empty_cache()
 
@@ -55,11 +56,11 @@ class Config():
     BASE_DIR = os.path.join(os.getcwd() , 'data')
     train_df = pd.read_csv(BASE_DIR  +  '/train.csv')
     TRAIN_VAL_SPLIT_SIZE = 0.14
-    TRAIN_BATCH_SIZE =10
-    VAL_BATCH_SIZE = 10
-    TEST_BATCH_SIZE  = 10
-    LR_MAX = 1e-4 
-    NUM_EPOCHS = 10
+    TRAIN_BATCH_SIZE =128
+    VAL_BATCH_SIZE = 128
+    TEST_BATCH_SIZE  = 128
+    LR_MAX = 5e-4 
+    NUM_EPOCHS = 16
     TIM_NUM_CLASS =6 # 768 swin
     NORMALIZE_TARGET = "log_transform_mean_std"   #"log_transform" #
     RANDOM_NUMBER = 42
@@ -68,7 +69,7 @@ class Config():
     TRAITS_NAME = ['X4_mean', 'X11_mean', 'X18_mean', 'X26_mean', 'X50_mean', 'X3112_mean' ]
     FOLD = 0 # Which fold to set as validation data
     IMAGE_SIZE =128
-    TARGET_IMAGE_SIZE =  384
+    TARGET_IMAGE_SIZE =  224
     T_MAX =        9
     LR_MODE = "step" # LR scheduler mode from one of "cos", "step", "exp"
     torch.manual_seed(RANDOM_NUMBER)
@@ -289,7 +290,7 @@ CONFIG = Config()
 
 # %%
 wandb.login()
-wandb.init(project="cs680v3",group="swin_net_baseline_selected_features",name="swim_large_fine_tuning",
+wandb.init(project="cs680v3",group="densenet",name="edensenet_fine_tuning",
     config = {
     "LR_max": CONFIG.LR_MAX,
     "WEIGHT_DECAY":CONFIG.WEIGHT_DECAY,
@@ -383,13 +384,13 @@ STD = [0.229, 0.224, 0.225]
 TRAIN_TRANSFORMS = A.Compose([
     A.Resize(CONFIG.TARGET_IMAGE_SIZE, CONFIG.TARGET_IMAGE_SIZE),
     A.RandomCrop(width=CONFIG.TARGET_IMAGE_SIZE, height=CONFIG.TARGET_IMAGE_SIZE),  # Simulate different crops
-    A.HorizontalFlip(p=0.1),  # Simulate left-right flips
-    A.VerticalFlip(p=0.1),  # Simulate up-down flips
-    A.RandomBrightnessContrast(brightness_limit=(-0.2, 0.2), contrast_limit=(-0.2, 0.2), p=0.2),  # Adjust brightness and contrast
-    A.RandomRotate90(p=0.2),  # Simulate different rotations
-    A.GaussianBlur(blur_limit=(3, 7), p=0.1),  # Introduce slight blur
-    A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.1, rotate_limit=15, p=0.2),  # Combine shift, scale, and rotation
-    A.HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20, p=0.2),  # Adjust hue, saturation, and value
+    #A.HorizontalFlip(p=0.5),  # Simulate left-right flips
+    #A.VerticalFlip(p=0.5),  # Simulate up-down flips
+    A.RandomBrightnessContrast(brightness_limit=(-0.2, 0.2), contrast_limit=(-0.2, 0.2), p=0.5),  # Adjust brightness and contrast
+    #A.RandomRotate90(p=0.5),  # Simulate different rotations
+    A.GaussianBlur(blur_limit=(3, 7), p=0.5),  # Introduce slight blur
+    A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.1, rotate_limit=15, p=0.5),  # Combine shift, scale, and rotation
+    A.HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20, p=0.5),  # Adjust hue, saturation, and value
     A.ToFloat(),
     A.Normalize(mean=MEAN, std=STD, max_pixel_value=1),
     ToTensorV2(),
@@ -461,7 +462,7 @@ validation_dataloader = DataLoader(
 test_dataset = create_dataset(
     X_jpeg_bytes = test_tabular_scaled['jpeg_bytes'].values,
     X_tabular = test_tabular_scaled[CONFIG.EXTRA_COLOUMN].values.astype(np.float32),
-    y = test_tabular_scaled[CONFIG.TRAITS_NAME].values.astype(np.float32),
+    y = test_tabular_scaled["id"].values,
     transforms= TEST_TRANSFORMS
     )
 
@@ -484,147 +485,22 @@ for i, column in enumerate(CONFIG.TRAITS_NAME):
 
 fig.tight_layout()
 
-# %% [markdown]
-# # Defining the MODEL
-# 
-# # Define the Image Backbone and Tabular Model
 
-# %%
-# class ImageBackbone_swin(nn.Module):
-#     def __init__(self, backbone_name, weight_path, out_features, fixed_feature_extractor=False):
-#         super().__init__()
-#         self.out_features = out_features
-#         self.backbone = timm.create_model('swin_tiny_patch4_window7_224.ms_in22k', pretrained=False, num_classes=CONFIG.N_TARGETS)
-#         #self.backbone.load_state_dict(torch.load(weight_path))
-#         if fixed_feature_extractor:
-#             for param in self.backbone.parameters():
-#                 param.requires_grad = False
-#         in_features = self.backbone.num_features
-        
-#         self.backbone.head = nn.Identity()
-#         self.head = nn.Sequential(
-#             nn.AdaptiveAvgPool2d(1),
-#             nn.Flatten(),
-#             nn.Linear(in_features, out_features),
-#         )
-
-#     def forward(self, x):
-#         x = self.backbone(x)
-#         #print(x.shape)
-#         x = x.permute(0, 3, 1, 2)
-#         return self.head(x)
-    
-class ImageBackbone_swin(nn.Module):
-    def __init__(self, backbone_name, weight_path, out_features, fixed_feature_extractor=None):
+class ImageBackbone_efficientV2(nn.Module):
+    def __init__(self, out_features, fixed_feature_extractor=None):
         super().__init__()
-        self.out_features = out_features
-        self.backbone = timm.create_model('swin_large_patch4_window12_384.ms_in22k_ft_in1k', pretrained=True, num_classes=6) #remove classifier nn.Linear
+        self.out_features = out_features 
+        self.backbone = timm.create_model('densenet201', pretrained=True, num_classes=out_features) #remove classifier nn.Linear #tf_efficientnetv2_b3.in21k
         #self.backbone = backbone_.forward_head(backbone_, pre_logits=True)
         in_features = self.backbone.num_features
         
     def forward(self, x):
         x = self.backbone(x)
         return x  
-class ImageBackbone_dinoV2(nn.Module):
-    def __init__(self, backbone_name, weight_path, out_features, fixed_feature_extractor=None):
-        super().__init__()
-        self.out_features = out_features
-        self.backbone = timm.create_model('vit_large_patch14_dinov2.lvd142m', pretrained=True, num_classes=6) #remove classifier nn.Linear
-        #self.backbone = backbone_.forward_head(backbone_, pre_logits=True)
-        in_features = self.backbone.num_features
-        
-    def forward(self, x):
-        x = self.backbone(x)
-        return x
-
-class TabularBackbone(nn.Module):
-    def __init__(self, n_features, out_features):
-        super().__init__()
-        self.out_features = out_features
-        self.fc = nn.Sequential(
-            nn.Linear(n_features, 512),
-            nn.BatchNorm1d(512),
-            nn.GELU(),
-            nn.Dropout(0.1),
-            nn.Linear(512, out_features),
-        )
-
-    def forward(self, x):
-        return self.fc(x)    
 
 
-
-# %% [markdown]
-# # Combine the image feature extraction model with tabular feature extraction model 
-
-# %%
-def initialize_timm_model( model_name   , tim_num_class=0.0, fine_tuned_weight = None,fixed_feature_extractor=True):
-    model_ft  = None
-    if model_name == "resnet34" :
-        """ Resnet34 """
-        model = timm.create_model('resnet34' , num_classes=tim_num_class )
-        return model
-    if model_name == "Swin_Transformer":
-        model = timm.create_model('swin_tiny_patch4_window7_224.ms_in22k' , pretrained=True , num_classes = tim_num_class)
-        return model 
-    if model_name == "swin_large":
-
-        model = ImageBackbone_swin(model_name,fine_tuned_weight , tim_num_class,fixed_feature_extractor)
-
-        #model.head.drop = nn.Dropout(p=0.1,inplace=False)
-        return model
-    if model_name =="convnextv2":
-        model = timm.create_model('convnext_tiny.in12k_ft_in1k_384',num_classes=tim_num_class)
-        return model     
-    if model_name == "efficientnet_v2":
-        model = timm.create_model("efficientnet_b2.ra_in1k",pretrained = True)
-        model.classifier = nn.Dropout(p=0.2,inplace=False)
-        return model
-    if model_name == "dinoV2":
-        model = ImageBackbone_dinoV2(model_name,weight_path=None , out_features=tim_num_class,fixed_feature_extractor=fixed_feature_extractor)
-        return model
-
-
-# tm_model = initialize_timm_model("swin_large",tim_num_class=CONFIG.TIM_NUM_CLASS)
-# data_config = timm.data.resolve_model_data_config(tm_model)
-# transforms = timm.data.create_transform(**data_config, is_training=True)
-
-
-# %%
-class CustomModel(nn.Module):
-    def __init__(self,input_channels,out_channels, target_features_num , tim_num_class , model_name):
-        super().__init__()
-        self.img_backbone = initialize_timm_model(model_name=model_name ,tim_num_class=tim_num_class , fine_tuned_weight = CONFIG.TIMM_FINED_TUNED_WEIGHT,fixed_feature_extractor=None)      
-    def forward(self,image,x):
-        output = self.img_backbone(image) # bach * (hight*col)
-        return output
-class BestModelSaveCallback:
-    def __init__(self, save_path):
-        self.save_path = save_path
-        self.best_accuracy = -1
-
-    def __call__(self, accuracy,model):
-        if accuracy > self.best_accuracy:
-            self.best_accuracy = accuracy
-            model.to(device = "cpu")
-            torch.save(model, self.save_path)
-            model.to(device=DEVICE)
-
-
-# %%
-if CONFIG.TIM_MODEL_NAME == "swin_large":
-    if CONFIG.INCLUDE_EXTRA_FEATURES:
-        model = CustomModel(input_channels = len(CONFIG.EXTRA_COLOUMN) ,out_channels =CONFIG.TABULAR_NN_OUTPUT, target_features_num= len(CONFIG.TRAITS_NAME), tim_num_class=CONFIG.TIM_NUM_CLASS , model_name=CONFIG.TIM_MODEL_NAME)
-    else:
-        model = initialize_timm_model(model_name=CONFIG.TIM_MODEL_NAME , tim_num_class = len(CONFIG.TRAITS_NAME) )    
-    model.to(device = DEVICE)
-elif CONFIG.TIM_MODEL_NAME == "dinoV2":
-    if CONFIG.INCLUDE_EXTRA_FEATURES:
-        model = CustomModel(input_channels = len(CONFIG.EXTRA_COLOUMN) ,out_channels =CONFIG.TABULAR_NN_OUTPUT, target_features_num= len(CONFIG.TRAITS_NAME), tim_num_class=CONFIG.TIM_NUM_CLASS , model_name=CONFIG.TIM_MODEL_NAME)
-    else:
-        model = initialize_timm_model(model_name=CONFIG.TIM_MODEL_NAME , tim_num_class = len(CONFIG.TRAITS_NAME) )    
-    model.to(device = DEVICE)
-
+model  = ImageBackbone_efficientV2(out_features=len(CONFIG.TRAITS_NAME) , fixed_feature_extractor=False)
+model.to(DEVICE)
 
 # %%
 # img = torch.ones(4,3,518,518).to('cuda')
@@ -716,7 +592,7 @@ def train_batch(inputs,model):
         x = x.to(DEVICE)
         y = y.to(DEVICE)
         z = z.to(DEVICE)
-        y_pred = model(x,z)        
+        y_pred = model(x)        
         #print("pred-size=",y_pred.size)
         
     else:
@@ -738,23 +614,6 @@ def train_batch(inputs,model):
     R2sc.update(y_pred , y )
     return LOSS.avg.detach().cpu().numpy() ,MSE.compute().item() ,R2sc.compute().item()
 
-@torch.no_grad
-def do_prediction(inputs,model, is_val=False):
-    global Train_std_tensor , Train_mean_tensor
-    model.eval()
-    if  CONFIG.INCLUDE_EXTRA_FEATURES:
-        x,z,y = inputs
-        x = x.to(DEVICE)
-        y = y.to(DEVICE)
-        z = z.to(DEVICE)
-        prediction = model(x,z)
-    else:
-        x,y = inputs
-        x = x.to(DEVICE)
-        y = y.to(DEVICE)
-        prediction = model(x)
-    if is_val :
-        prediction =prediction
 
 
 @torch.no_grad()
@@ -766,7 +625,7 @@ def validation_loss_batch(inputs,model):
         x = x.to(DEVICE)
         y = y.to(DEVICE)
         z = z.to(DEVICE)
-        prediction = model(x,z)
+        prediction = model(x)
     else:
         x,y = inputs
         x = x.to(DEVICE)
@@ -839,22 +698,28 @@ def train(trainLoader,valLoader,model,num_epochs,best_model_callback):
             wandb.log({"Validation-Loss":loss  , "Validation-MSE" :  mse_ , "Validation-R2":  val_r2 })
 
 
-        # val_epoch_loss.append(np.array(val_loss_current_epoch).mean())
-        #val_epoch_r2.append(np.array(r2_).mean())
-        # val_epoch_mse.append(np.array(mse_).mean())
-        
-        # print(f"epoch:{epoch}, Training (avg) loss : {train_epoch_loss[-1]} , Validation loss (avg) = {val_epoch_loss[-1]}")
-        # print(f"epoch:{epoch}, Training (avg) r2 : {train_epoch_r2[-1]} , Validation r2(avg) = {val_epoch_r2[-1]}")
-        
-        best_model_callback(val_r2,model)        # save the best model according to the validation accuracy
+        best_model_callback(val_r2,model)        
         
         
     return train_epoch_loss,val_epoch_loss,train_epoch_r2 , val_epoch_r2
 
 
+
+class BestModelSaveCallback:
+    def __init__(self, save_path):
+        self.save_path = save_path
+        self.best_accuracy = -1
+
+    def __call__(self, accuracy,model):
+        if accuracy > self.best_accuracy:
+            self.best_accuracy = accuracy
+            model.to(device = "cpu")
+            torch.save(model, self.save_path)
+            model.to(device=DEVICE)
+
 # %%
 
-MODEL_NAME_SAVE = 'swin_large_fine_tuning.pth'
+MODEL_NAME_SAVE = 'denseNet_fine_tuned.pth'
 best_model_callback = BestModelSaveCallback(save_path=os.path.join(CONFIG.BASE_DIR,MODEL_NAME_SAVE))
 train_losses, val_losses , train_accuracies,val_accuracies = train(train_dataloader,validation_dataloader,model,CONFIG.NUM_EPOCHS,best_model_callback)
 
@@ -879,9 +744,13 @@ for index , batch in tqdm.tqdm(enumerate(iter(test_dataloader))):
         pred_final =   scaling_pipeline['log']['log'].inverse_transform(temp2[CONFIG.TRAITS_NAME])
         #pred_final["id"] = test_id.cpu().detach().numpy()
         submission_df = pd.concat([submission_df, pred_final.assign(id=test_id.cpu().detach().numpy())], ignore_index=True)
-submission_df.to_csv('submission_self_tuning.csv', index=False)
+# submission_df.to_csv('submission_self_tuning.csv', index=False)
+submission_df[["id"]  + CONFIG.TRAITS_NAME ].to_csv('submission_tuned_densenet.csv', index=False)
 print("Submit!")
 # %%
+
+
+
 
 
 

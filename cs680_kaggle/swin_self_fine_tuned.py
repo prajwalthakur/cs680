@@ -57,6 +57,7 @@ class Config():
     TRAIN_VAL_SPLIT_SIZE = 0.14
     TRAIN_BATCH_SIZE = 128
     VAL_BATCH_SIZE = 128
+    TEST_BATCH_SIZE =128
     LR_MAX = 1e-4 
     NUM_EPOCHS = 20
     TIM_NUM_CLASS = 768 #vit : 512  # swin  
@@ -67,7 +68,7 @@ class Config():
     TRAITS_NAME = ['X4_mean', 'X11_mean', 'X18_mean', 'X26_mean', 'X50_mean', 'X3112_mean' ]
     FOLD = 0 # Which fold to set as validation data
     IMAGE_SIZE =128
-    TARGET_IMAGE_SIZE =  224
+    TARGET_IMAGE_SIZE =  384
     T_MAX =        9
     LR_MODE = "step" # LR scheduler mode from one of "cos", "step", "exp"
     torch.manual_seed(RANDOM_NUMBER)
@@ -76,9 +77,9 @@ class Config():
     WEIGHT_DECAY = 0.01
     TABULAR_NN_OUTPUT  = 256
     TIM_MODEL_NAME = "swin_large" #"efficientnet_v2" # 
-    TIMM_FINED_TUNED_WEIGHT = f'{BASE_DIR}/swin_small_fine_tuning.pth'
+    TIMM_FINED_TUNED_WEIGHT = f'{BASE_DIR}/model_08.pth'
     Lower_Quantile = 0.005
-    Upper_Quantile = 0.98 #0.985
+    Upper_Quantile = 0.99 #0.985
     # use XGBBOOST to find prominant features
     EXTRA_COLOUMN = ['WORLDCLIM_BIO1_annual_mean_temperature',
        'WORLDCLIM_BIO12_annual_precipitation',
@@ -288,7 +289,7 @@ CONFIG = Config()
 
 # %%
 wandb.login()
-wandb.init(project="cs680v3",group="swin_tf",name="swin_small_self_fine_tuned",
+wandb.init(project="cs680v3",group="swin_tf",name="swin_large_net_fine_tuned",
         config = {
     "LR_max": CONFIG.LR_MAX,
     "WEIGHT_DECAY":CONFIG.WEIGHT_DECAY,
@@ -382,13 +383,13 @@ STD = [0.229, 0.224, 0.225]
 TRAIN_TRANSFORMS = A.Compose([
     A.Resize(CONFIG.TARGET_IMAGE_SIZE, CONFIG.TARGET_IMAGE_SIZE),
     A.RandomCrop(width=CONFIG.TARGET_IMAGE_SIZE, height=CONFIG.TARGET_IMAGE_SIZE),  # Simulate different crops
-    A.HorizontalFlip(p=0.5),  # Simulate left-right flips
-    A.VerticalFlip(p=0.5),  # Simulate up-down flips
-    A.RandomBrightnessContrast(brightness_limit=(-0.2, 0.2), contrast_limit=(-0.2, 0.2), p=0.5),  # Adjust brightness and contrast
-    A.RandomRotate90(p=0.5),  # Simulate different rotations
-    A.GaussianBlur(blur_limit=(3, 7), p=0.1),  # Introduce slight blur
-    A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.1, rotate_limit=15, p=0.5),  # Combine shift, scale, and rotation
-    A.HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20, p=0.5),  # Adjust hue, saturation, and value
+    #A.HorizontalFlip(p=0.5),  # Simulate left-right flips
+    #A.VerticalFlip(p=0.5),  # Simulate up-down flips
+    #A.RandomBrightnessContrast(brightness_limit=(-0.2, 0.2), contrast_limit=(-0.2, 0.2), p=0.5),  # Adjust brightness and contrast
+    #A.RandomRotate90(p=0.5),  # Simulate different rotations
+    A.GaussianBlur(blur_limit=(3, 7), p=0.5),  # Introduce slight blur
+    #A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.1, rotate_limit=15, p=0.5),  # Combine shift, scale, and rotation
+    #A.HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20, p=0.5),  # Adjust hue, saturation, and value
     A.ToFloat(),
     A.Normalize(mean=MEAN, std=STD, max_pixel_value=1),
     ToTensorV2(),
@@ -477,7 +478,7 @@ test_dataset = create_dataset(
 
 test_dataloader = DataLoader(
     test_dataset,
-    batch_size=1,
+    batch_size=CONFIG.TEST_BATCH_SIZE,
     shuffle=False,
     drop_last=False,
     num_workers= 0 #psutil.cpu_count(),
@@ -504,7 +505,7 @@ class ImageBackbone_swin(nn.Module):
     def __init__(self, backbone_name, weight_path, out_features, fixed_feature_extractor=False):
         super().__init__()
         self.out_features = out_features
-        self.backbone =timm.create_model('swin_tiny_patch4_window7_224.ms_in22k', pretrained=False, num_classes=CONFIG.N_TARGETS) # timm.create_model('swin_large_patch4_window12_384.ms_in22k_ft_in1k', pretrained=True, num_classes=CONFIG.N_TARGETS)
+        self.backbone =timm.create_model('swin_large_patch4_window12_384.ms_in22k_ft_in1k', pretrained=False, num_classes=CONFIG.N_TARGETS) # timm.create_model('swin_large_patch4_window12_384.ms_in22k_ft_in1k', pretrained=True, num_classes=CONFIG.N_TARGETS)
         self.backbone.load_state_dict(torch.load(weight_path))
         if fixed_feature_extractor:
             for param in self.backbone.parameters():
@@ -638,7 +639,7 @@ class BestModelSaveCallback:
         if accuracy > self.best_accuracy:
             self.best_accuracy = accuracy
             model.to(device = "cpu")
-            torch.save(model.state_dict(), self.save_path)
+            torch.save(model, self.save_path)
             model.to(device=DEVICE)
 
 
@@ -884,12 +885,33 @@ def train(trainLoader,valLoader,model,num_epochs,best_model_callback):
 
 # %%
 
-MODEL_NAME_SAVE = 'swin_small_self_fine_tuned.pth'
-best_model_callback = BestModelSaveCallback(save_path=os.path.join(CONFIG.BASE_DIR,MODEL_NAME_SAVE))
-train_losses, val_losses , train_accuracies,val_accuracies = train(train_dataloader,validation_dataloader,model,CONFIG.NUM_EPOCHS,best_model_callback)
+# MODEL_NAME_SAVE = 'swin_large_net_fine_tuned.pth'
+# best_model_callback = BestModelSaveCallback(save_path=os.path.join(CONFIG.BASE_DIR,MODEL_NAME_SAVE))
+# train_losses, val_losses , train_accuracies,val_accuracies = train(train_dataloader,validation_dataloader,model,CONFIG.NUM_EPOCHS,best_model_callback)
 
+model.load_state_dict(torch.load('/home/prajwal/cs680/cs680_kaggle/data/swin_large_net_fine_tuned.pth'))
 # %%
+model.eval()
+for index , batch in tqdm.tqdm(enumerate(iter(test_dataloader))):
+    X_img_test = batch[0] 
+    X_features  = batch[1]
+    test_id  = batch[2]
+    #print(batch) 
+    with torch.no_grad():
+        #print(X_img_test.shape, X_features.shape)
+        y_pred = model(X_img_test.to(DEVICE) ,X_features.to(DEVICE) ).detach().cpu().numpy()  #,X_features.to(DEVICE)
+    
+        pred_pd = pd.DataFrame(columns=CONFIG.EXTRA_COLOUMN + CONFIG.TRAITS_NAME)
+        pred_pd[CONFIG.EXTRA_COLOUMN] =-1
+        pred_pd[CONFIG.TRAITS_NAME] = y_pred 
 
+        temp1 =   scaling_pipeline['std_scale']['scale'].inverse_transform(pred_pd)
+        temp2=    pd.DataFrame(temp1, columns=CONFIG.EXTRA_COLOUMN + CONFIG.TRAITS_NAME)
+        pred_final =   scaling_pipeline['log']['log'].inverse_transform(temp2[CONFIG.TRAITS_NAME])
+        #pred_final["id"] = test_id.cpu().detach().numpy()
+        submission_df = pd.concat([submission_df, pred_final.assign(id=test_id.cpu().detach().numpy())], ignore_index=True)
+submission_df.to_csv('submission_net_tuned_swin_large.csv', index=False)
+print("Submit!")
 
 # %%
 
