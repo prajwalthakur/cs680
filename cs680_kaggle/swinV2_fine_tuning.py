@@ -36,7 +36,7 @@ torch.manual_seed(RANDOM_NUMBER)
 # # select Device
 
 # %%
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else  "cpu") #"cuda:1" if torch.cuda.is_available() else 
+DEVICE = torch.device("cuda:1" if torch.cuda.is_available() else  "cpu") #"cuda:1" if torch.cuda.is_available() else 
 # torch.cuda.set_per_process_memory_fraction(0.95, device=DEVICE)
 torch.cuda.empty_cache()
 
@@ -56,11 +56,11 @@ class Config():
     BASE_DIR = os.path.join(os.getcwd() , 'data')
     train_df = pd.read_csv(BASE_DIR  +  '/train.csv')
     TRAIN_VAL_SPLIT_SIZE = 0.14
-    TRAIN_BATCH_SIZE = 32
-    VAL_BATCH_SIZE =  10
-    TEST_BATCH_SIZE = 10
-    LR_MAX = 1e-3
-    NUM_EPOCHS = 12
+    TRAIN_BATCH_SIZE = 24
+    VAL_BATCH_SIZE =  2
+    TEST_BATCH_SIZE = 2
+    LR_MAX = 1e-4
+    NUM_EPOCHS = 10
     TIM_NUM_CLASS =6 # 
     NORMALIZE_TARGET = "log_transform_mean_std"   #"log_transform" #
     RANDOM_NUMBER = 42
@@ -69,7 +69,7 @@ class Config():
     TRAITS_NAME = ['X4_mean', 'X11_mean', 'X18_mean', 'X26_mean', 'X50_mean', 'X3112_mean' ]
     FOLD = 0 # Which fold to set as validation data
     IMAGE_SIZE =128
-    TARGET_IMAGE_SIZE =  518
+    TARGET_IMAGE_SIZE =  256
     T_MAX =        9
     LR_MODE = "step" # LR scheduler mode from one of "cos", "step", "exp"
     torch.manual_seed(RANDOM_NUMBER)
@@ -77,7 +77,7 @@ class Config():
     EXTRA_FEATURES_NORMALIZATION = "standard_scalar"  #"min_max_normalization"  #
     WEIGHT_DECAY = 0.01
     TABULAR_NN_OUTPUT  = 256
-    TIM_MODEL_NAME = "dinoV2" #"swin_large" #"efficientnet_v2" # 
+    TIM_MODEL_NAME = "swinV2" #"swin_large" #"efficientnet_v2" # 
     TIMM_FINED_TUNED_WEIGHT = f'{BASE_DIR}/model_08_ensemble.pth'
     Lower_Quantile = 0.005
     Upper_Quantile = 0.98 #0.985
@@ -246,7 +246,7 @@ CONFIG = Config()
 # %%
 if CONFIG.WANDB_INIT:
     wandb.login()
-    wandb.init(project="cs680v3",group="dinoV2_fine_tuning",name="dinoV2_fine_tuning",
+    wandb.init(project="cs680v3",group="dinoV2_fine_tuning",name="swinV2_fine_tuning",
         config = {
         "LR_max": CONFIG.LR_MAX,
         "WEIGHT_DECAY":CONFIG.WEIGHT_DECAY,
@@ -342,7 +342,8 @@ MEAN = [0.485, 0.456, 0.406]
 STD = [0.229, 0.224, 0.225]
 TRAIN_TRANSFORMS = A.Compose([
     A.RandomResizedCrop(size=(CONFIG.TARGET_IMAGE_SIZE,CONFIG.TARGET_IMAGE_SIZE), interpolation=cv2.INTER_CUBIC),  # Simulate different crops
-    A.HorizontalFlip(p=0.2),  
+    #A.HorizontalFlip(p=0.2),  
+    A.GaussianBlur(blur_limit=(3, 7), p=0.5),  # Introduce slight blur
     A.ToFloat(),
     A.Normalize(mean=MEAN, std=STD, max_pixel_value=1),
     ToTensorV2(),
@@ -350,7 +351,7 @@ TRAIN_TRANSFORMS = A.Compose([
 
 TEST_TRANSFORMS = A.Compose([
     A.Resize(CONFIG.TARGET_IMAGE_SIZE,CONFIG.TARGET_IMAGE_SIZE),
-    A.CenterCrop(CONFIG.TARGET_IMAGE_SIZE,CONFIG.TARGET_IMAGE_SIZE),
+    #A.CenterCrop(CONFIG.TARGET_IMAGE_SIZE,CONFIG.TARGET_IMAGE_SIZE),
     A.ToFloat(),
     A.Normalize(mean=MEAN, std=STD, max_pixel_value=1),
     ToTensorV2(),
@@ -427,11 +428,11 @@ test_dataloader = DataLoader(
 
 # %%
 
-class ImageBackbone_dinoV2(nn.Module):
+class ImageBackbone_swinV2(nn.Module):
     def __init__(self, backbone_name, weight_path, out_features, fixed_feature_extractor=None):
         super().__init__()
         self.out_features = out_features
-        self.backbone = timm.create_model('vit_small_patch14_dinov2.lvd142m', pretrained=True, num_classes=out_features) #remove classifier nn.Linear
+        self.backbone = timm.create_model('swinv2_large_window12to16_192to256.ms_in22k_ft_in1k', pretrained=True, num_classes=out_features) #remove classifier nn.Linear
         #self.backbone = backbone_.forward_head(backbone_, pre_logits=True)
         in_features = self.backbone.num_features
         
@@ -443,8 +444,8 @@ class ImageBackbone_dinoV2(nn.Module):
 # %%
 def initialize_image_model( model_name   , tim_num_class=0.0, fine_tuned_weight = None,fixed_feature_extractor=True):
     model_ft  = None
-    if model_name == "dinoV2":
-        model = ImageBackbone_dinoV2(model_name,weight_path=None , out_features=tim_num_class,fixed_feature_extractor=fixed_feature_extractor)
+    if model_name == "swinV2":
+        model = ImageBackbone_swinV2(model_name,weight_path=None , out_features=tim_num_class,fixed_feature_extractor=fixed_feature_extractor)
         return model
 
 # %%
@@ -494,16 +495,16 @@ optimizer = torch.optim.AdamW(
 
 # lr scheduler
 def get_lr_scheduler(optimizer):
-    # return torch.optim.lr_scheduler.OneCycleLR(
-    #     optimizer=optimizer,
-    #     max_lr=CONFIG.LR_MAX,
-    #     total_steps=CONFIG.N_STEPS,
-    #     pct_start=0.1,
-    #     anneal_strategy='cos',
-    #     div_factor=1e1,
-    #     final_div_factor=1e1,
-    # )
-    return torch.optim.lr_scheduler.StepLR(optimizer, step_size=3, gamma=0.1)
+    return torch.optim.lr_scheduler.OneCycleLR(
+        optimizer=optimizer,
+        max_lr=CONFIG.LR_MAX,
+        total_steps=CONFIG.N_STEPS,
+        pct_start=0.1,
+        anneal_strategy='cos',
+        div_factor=1e1,
+        final_div_factor=1e1,
+    )
+    #return torch.optim.lr_scheduler.StepLR(optimizer, step_size=3, gamma=0.1)
     
 class AverageMeter(object):
     def __init__(self):
@@ -683,7 +684,7 @@ def train(trainLoader,valLoader,model,num_epochs,best_model_callback):
 
 
 # %%
-MODEL_NAME_SAVE = 'dino_v2_fine_tuning.pth'
+MODEL_NAME_SAVE = 'swin_v2_fine_self_tuning.pth'
 best_model_callback = BestModelSaveCallback(save_path=os.path.join(CONFIG.BASE_DIR,MODEL_NAME_SAVE))
 train_losses, val_losses , train_accuracies,val_accuracies = train(train_dataloader,validation_dataloader,model,CONFIG.NUM_EPOCHS,best_model_callback)
 
