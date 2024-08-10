@@ -36,7 +36,7 @@ torch.manual_seed(RANDOM_NUMBER)
 # # select Device
 
 # %%
-DEVICE = torch.device("cuda:1" if torch.cuda.is_available() else  "cpu") #"cuda:1" if torch.cuda.is_available() else 
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else  "cpu") #"cuda:1" if torch.cuda.is_available() else 
 DATA_DIRECTORY = os.path.join(os.getcwd(),"data")
 torch.cuda.empty_cache()
 
@@ -56,9 +56,9 @@ class Config():
     BASE_DIR = os.path.join(os.getcwd() , 'data')
     train_df = pd.read_csv(BASE_DIR  +  '/train.csv')
     TRAIN_VAL_SPLIT_SIZE = 0.14
-    TRAIN_BATCH_SIZE =128
-    VAL_BATCH_SIZE = 128
-    TEST_BATCH_SIZE  = 128
+    TRAIN_BATCH_SIZE =32
+    VAL_BATCH_SIZE = 32
+    TEST_BATCH_SIZE  = 32
     LR_MAX = 5e-4 
     NUM_EPOCHS = 16
     TIM_NUM_CLASS =6 # 768 swin
