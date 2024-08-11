@@ -56,9 +56,15 @@ class Config():
     train_df = pd.read_csv(BASE_DIR  +  '/train.csv')
     TRAIN_VAL_SPLIT_SIZE = 0.18
     TRAIN_BATCH_SIZE = 64
+<<<<<<< HEAD
     VAL_BATCH_SIZE = 64
     TEST_BATCH_SIZE =64
     LR_MAX = 1e-4 
+=======
+    VAL_BATCH_SIZE =  64
+    TEST_BATCH_SIZE = 64
+    LR_MAX = 8e-5 
+>>>>>>> 5fb482e (updated swin_self_fine_tuned)
     NUM_EPOCHS = 20
     IMG_OUT_FEATURES = 1024  #512  # swin     #768<-vit   
     NORMALIZE_TARGET = "log_transform_mean_std"   #"log_transform" #
@@ -284,9 +290,9 @@ TRAIN_TRANSFORMS = A.Compose([
     A.HorizontalFlip(p=0.25),
     A.RandomResizedCrop(size=(CONFIG.TARGET_IMAGE_SIZE,CONFIG.TARGET_IMAGE_SIZE), interpolation=cv2.INTER_CUBIC ,p=0.5),  # Simulate different crops
     A.Resize(CONFIG.TARGET_IMAGE_SIZE,CONFIG.TARGET_IMAGE_SIZE),
-    A.RandomBrightnessContrast(brightness_limit=0.1, contrast_limit=0.1, p=0.25),
-    A.ImageCompression(quality_lower=85, quality_upper=100, p=0.25), 
-    #A.GaussianBlur(blur_limit=(3, 7), p=0.5),  # Introduce slight blur
+    A.RandomBrightnessContrast(brightness_limit=0.1, contrast_limit=0.1, p=0.5),
+    A.ImageCompression(quality_lower=85, quality_upper=100, p=0.5), 
+    A.GaussianBlur(blur_limit=(3, 7), p=0.25),  # Introduce slight blur
     A.ToFloat(),
     A.Normalize(mean=MEAN, std=STD, max_pixel_value=1),
     ToTensorV2(),
@@ -470,10 +476,11 @@ class CustomModel(nn.Module):
             nn.Linear(self.extra_features_model.out_features + self.img_backbone.out_features,1024 ),  # 256
             nn.BatchNorm1d(1024),
             nn.GELU(),
-            nn.Dropout(0.1),
+            nn.Dropout(0.2),
             nn.Linear(1024, 512), #256
             nn.BatchNorm1d(512),
             nn.GELU(),
+            nn.Dropout(0.2),
             nn.Linear(512, 64), #256
             nn.BatchNorm1d(64),
             nn.GELU(),
