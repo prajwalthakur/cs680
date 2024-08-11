@@ -48,193 +48,92 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler , MinMaxScaler
 import scipy as sp
-
+#pid :279026 
 # %%
 class Config():
 
     BASE_DIR = os.path.join(os.getcwd() , 'data')
     train_df = pd.read_csv(BASE_DIR  +  '/train.csv')
-    TRAIN_VAL_SPLIT_SIZE = 0.14
-    TRAIN_BATCH_SIZE = 128
-    VAL_BATCH_SIZE = 128
-    TEST_BATCH_SIZE =128
+    TRAIN_VAL_SPLIT_SIZE = 0.18
+    TRAIN_BATCH_SIZE =256
+    VAL_BATCH_SIZE = 256
+    TEST_BATCH_SIZE =256
     LR_MAX = 1e-4 
     NUM_EPOCHS = 20
-    TIM_NUM_CLASS = 768 #vit : 512  # swin  
+    IMG_OUT_FEATURES = 1024  #512  # swin     #768<-vit   
     NORMALIZE_TARGET = "log_transform_mean_std"   #"log_transform" #
     RANDOM_NUMBER = 42
     NUM_FLODS  = 5
     NUM_CLASSES = 6
     TRAITS_NAME = ['X4_mean', 'X11_mean', 'X18_mean', 'X26_mean', 'X50_mean', 'X3112_mean' ]
+    WANDB_INIT =  True
     FOLD = 0 # Which fold to set as validation data
     IMAGE_SIZE =128
-    TARGET_IMAGE_SIZE =  384
+    TARGET_IMAGE_SIZE =  256
     T_MAX =        9
-    LR_MODE = "step" # LR scheduler mode from one of "cos", "step", "exp"
     torch.manual_seed(RANDOM_NUMBER)
     INCLUDE_EXTRA_FEATURES = True
     EXTRA_FEATURES_NORMALIZATION = "standard_scalar"  #"min_max_normalization"  #
     WEIGHT_DECAY = 0.01
-    TABULAR_NN_OUTPUT  = 256
-    TIM_MODEL_NAME = "swin_large" #"efficientnet_v2" # 
-    TIMM_FINED_TUNED_WEIGHT = f'{BASE_DIR}/model_08.pth'
+    TABULAR_NN_OUTPUT  =   128 # 256
+    IMG_MODEL_NAME = "swinV2" #"efficientnet_v2" # 
+    IMG_FINED_TUNED_WEIGHT = f'{BASE_DIR}/swinV2.pth'
     Lower_Quantile = 0.005
-    Upper_Quantile = 0.99 #0.985
+    Upper_Quantile = 0.985 #0.985
     # use XGBBOOST to find prominant features
-    EXTRA_COLOUMN = ['WORLDCLIM_BIO1_annual_mean_temperature',
-       'WORLDCLIM_BIO12_annual_precipitation',
-       'WORLDCLIM_BIO13.BIO14_delta_precipitation_of_wettest_and_dryest_month',
-       'WORLDCLIM_BIO15_precipitation_seasonality',
-       'WORLDCLIM_BIO4_temperature_seasonality',
-       'WORLDCLIM_BIO7_temperature_annual_range',
-       'SOIL_bdod_0.5cm_mean_0.01_deg',
-       'SOIL_bdod_100.200cm_mean_0.01_deg',
-       'SOIL_bdod_15.30cm_mean_0.01_deg',
-       'SOIL_bdod_30.60cm_mean_0.01_deg',
-       'SOIL_bdod_5.15cm_mean_0.01_deg',
-       'SOIL_bdod_60.100cm_mean_0.01_deg', 'SOIL_cec_0.5cm_mean_0.01_deg',
-       'SOIL_cec_100.200cm_mean_0.01_deg',
-       'SOIL_cec_15.30cm_mean_0.01_deg', 'SOIL_cec_30.60cm_mean_0.01_deg',
-       'SOIL_cec_5.15cm_mean_0.01_deg', 'SOIL_cec_60.100cm_mean_0.01_deg',
-       'SOIL_cfvo_0.5cm_mean_0.01_deg',
-       'SOIL_cfvo_100.200cm_mean_0.01_deg',
-       'SOIL_cfvo_15.30cm_mean_0.01_deg',
-       'SOIL_cfvo_30.60cm_mean_0.01_deg',
-       'SOIL_cfvo_5.15cm_mean_0.01_deg',
-       'SOIL_cfvo_60.100cm_mean_0.01_deg',
-       'SOIL_clay_0.5cm_mean_0.01_deg',
-       'SOIL_clay_100.200cm_mean_0.01_deg',
-       'SOIL_clay_15.30cm_mean_0.01_deg',
-       'SOIL_clay_30.60cm_mean_0.01_deg',
-       'SOIL_clay_5.15cm_mean_0.01_deg',
-       'SOIL_clay_60.100cm_mean_0.01_deg',
-       'SOIL_nitrogen_0.5cm_mean_0.01_deg',
-       'SOIL_nitrogen_100.200cm_mean_0.01_deg',
-       'SOIL_nitrogen_15.30cm_mean_0.01_deg',
-       'SOIL_nitrogen_30.60cm_mean_0.01_deg',
-       'SOIL_nitrogen_5.15cm_mean_0.01_deg',
-       'SOIL_nitrogen_60.100cm_mean_0.01_deg',
-       'SOIL_ocd_0.5cm_mean_0.01_deg', 'SOIL_ocd_100.200cm_mean_0.01_deg',
-       'SOIL_ocd_15.30cm_mean_0.01_deg', 'SOIL_ocd_30.60cm_mean_0.01_deg',
-       'SOIL_ocd_5.15cm_mean_0.01_deg', 'SOIL_ocd_60.100cm_mean_0.01_deg',
-       'SOIL_ocs_0.30cm_mean_0.01_deg', 'SOIL_phh2o_0.5cm_mean_0.01_deg',
-       'SOIL_phh2o_100.200cm_mean_0.01_deg',
-       'SOIL_phh2o_15.30cm_mean_0.01_deg',
-       'SOIL_phh2o_30.60cm_mean_0.01_deg',
-       'SOIL_phh2o_5.15cm_mean_0.01_deg',
-       'SOIL_phh2o_60.100cm_mean_0.01_deg',
-       'SOIL_sand_0.5cm_mean_0.01_deg',
-       'SOIL_sand_100.200cm_mean_0.01_deg',
-       'SOIL_sand_15.30cm_mean_0.01_deg',
-       'SOIL_sand_30.60cm_mean_0.01_deg',
-       'SOIL_sand_5.15cm_mean_0.01_deg',
-       'SOIL_sand_60.100cm_mean_0.01_deg',
-       'SOIL_silt_0.5cm_mean_0.01_deg',
-       'SOIL_silt_100.200cm_mean_0.01_deg',
-       'SOIL_silt_15.30cm_mean_0.01_deg',
-       'SOIL_silt_30.60cm_mean_0.01_deg',
-       'SOIL_silt_5.15cm_mean_0.01_deg',
-       'SOIL_silt_60.100cm_mean_0.01_deg', 'SOIL_soc_0.5cm_mean_0.01_deg',
-       'SOIL_soc_100.200cm_mean_0.01_deg',
-       'SOIL_soc_15.30cm_mean_0.01_deg', 'SOIL_soc_30.60cm_mean_0.01_deg',
-       'SOIL_soc_5.15cm_mean_0.01_deg', 'SOIL_soc_60.100cm_mean_0.01_deg',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_01_._month_m1',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_02_._month_m1',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_03_._month_m1',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_04_._month_m1',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_05_._month_m1',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_01_._month_m10',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_02_._month_m10',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_03_._month_m10',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_04_._month_m10',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_05_._month_m10',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_01_._month_m11',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_02_._month_m11',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_03_._month_m11',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_04_._month_m11',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_05_._month_m11',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_01_._month_m12',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_02_._month_m12',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_03_._month_m12',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_04_._month_m12',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_05_._month_m12',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_01_._month_m2',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_02_._month_m2',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_03_._month_m2',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_04_._month_m2',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_05_._month_m2',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_01_._month_m3',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_02_._month_m3',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_03_._month_m3',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_04_._month_m3',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_05_._month_m3',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_01_._month_m4',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_02_._month_m4',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_03_._month_m4',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_04_._month_m4',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_05_._month_m4',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_01_._month_m5',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_02_._month_m5',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_03_._month_m5',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_04_._month_m5',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_05_._month_m5',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_01_._month_m6',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_02_._month_m6',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_03_._month_m6',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_04_._month_m6',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_05_._month_m6',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_01_._month_m7',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_02_._month_m7',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_03_._month_m7',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_04_._month_m7',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_05_._month_m7',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_01_._month_m8',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_02_._month_m8',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_03_._month_m8',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_04_._month_m8',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_05_._month_m8',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_01_._month_m9',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_02_._month_m9',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_03_._month_m9',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_04_._month_m9',
-       'MODIS_2000.2020_monthly_mean_surface_reflectance_band_05_._month_m9',
-       'VOD_C_2002_2018_multiyear_mean_m01',
-       'VOD_C_2002_2018_multiyear_mean_m02',
-       'VOD_C_2002_2018_multiyear_mean_m03',
-       'VOD_C_2002_2018_multiyear_mean_m04',
-       'VOD_C_2002_2018_multiyear_mean_m05',
-       'VOD_C_2002_2018_multiyear_mean_m06',
-       'VOD_C_2002_2018_multiyear_mean_m07',
-       'VOD_C_2002_2018_multiyear_mean_m08',
-       'VOD_C_2002_2018_multiyear_mean_m09',
-       'VOD_C_2002_2018_multiyear_mean_m10',
-       'VOD_C_2002_2018_multiyear_mean_m11',
-       'VOD_C_2002_2018_multiyear_mean_m12',
-       'VOD_Ku_1987_2017_multiyear_mean_m01',
-       'VOD_Ku_1987_2017_multiyear_mean_m02',
-       'VOD_Ku_1987_2017_multiyear_mean_m03',
-       'VOD_Ku_1987_2017_multiyear_mean_m04',
-       'VOD_Ku_1987_2017_multiyear_mean_m05',
-       'VOD_Ku_1987_2017_multiyear_mean_m06',
-       'VOD_Ku_1987_2017_multiyear_mean_m07',
-       'VOD_Ku_1987_2017_multiyear_mean_m08',
-       'VOD_Ku_1987_2017_multiyear_mean_m09',
-       'VOD_Ku_1987_2017_multiyear_mean_m10',
-       'VOD_Ku_1987_2017_multiyear_mean_m11',
-       'VOD_Ku_1987_2017_multiyear_mean_m12',
-       'VOD_X_1997_2018_multiyear_mean_m01',
-       'VOD_X_1997_2018_multiyear_mean_m02',
-       'VOD_X_1997_2018_multiyear_mean_m03',
-       'VOD_X_1997_2018_multiyear_mean_m04',
-       'VOD_X_1997_2018_multiyear_mean_m05',
-       'VOD_X_1997_2018_multiyear_mean_m06',
-       'VOD_X_1997_2018_multiyear_mean_m07',
-       'VOD_X_1997_2018_multiyear_mean_m08',
-       'VOD_X_1997_2018_multiyear_mean_m09',
-       'VOD_X_1997_2018_multiyear_mean_m10',
-       'VOD_X_1997_2018_multiyear_mean_m11',
-       'VOD_X_1997_2018_multiyear_mean_m12'
-       ]
+    EXTRA_COLOUMN = [
+        'WORLDCLIM_BIO1_annual_mean_temperature',
+    'WORLDCLIM_BIO13.BIO14_delta_precipitation_of_wettest_and_dryest_month',
+    'WORLDCLIM_BIO15_precipitation_seasonality',
+    'WORLDCLIM_BIO4_temperature_seasonality',
+    'SOIL_ocd_100.200cm_mean_0.01_deg',
+    'WORLDCLIM_BIO12_annual_precipitation',
+    'WORLDCLIM_BIO7_temperature_annual_range',
+    'SOIL_cec_0.5cm_mean_0.01_deg',
+    'SOIL_nitrogen_0.5cm_mean_0.01_deg',
+    'SOIL_ocd_60.100cm_mean_0.01_deg',
+    'SOIL_ocd_30.60cm_mean_0.01_deg',
+    'SOIL_clay_100.200cm_mean_0.01_deg',
+    'SOIL_soc_100.200cm_mean_0.01_deg',
+    'SOIL_nitrogen_100.200cm_mean_0.01_deg',
+    'SOIL_cec_100.200cm_mean_0.01_deg',
+    'SOIL_clay_15.30cm_mean_0.01_deg',
+    'SOIL_soc_60.100cm_mean_0.01_deg',
+    'MODIS_2000.2020_monthly_mean_surface_reflectance_band_02_._month_m10',
+    'SOIL_nitrogen_30.60cm_mean_0.01_deg',
+    'SOIL_clay_5.15cm_mean_0.01_deg',
+    'MODIS_2000.2020_monthly_mean_surface_reflectance_band_02_._month_m4',
+    'MODIS_2000.2020_monthly_mean_surface_reflectance_band_02_._month_m11',
+    'SOIL_ocd_0.5cm_mean_0.01_deg',
+    'SOIL_ocd_5.15cm_mean_0.01_deg',
+    'SOIL_cfvo_100.200cm_mean_0.01_deg',
+    'MODIS_2000.2020_monthly_mean_surface_reflectance_band_02_._month_m5',
+    'MODIS_2000.2020_monthly_mean_surface_reflectance_band_02_._month_m6',
+    'SOIL_cfvo_30.60cm_mean_0.01_deg',
+    'SOIL_cfvo_0.5cm_mean_0.01_deg',
+    'SOIL_soc_15.30cm_mean_0.01_deg',
+    'SOIL_nitrogen_15.30cm_mean_0.01_deg',
+    'SOIL_nitrogen_5.15cm_mean_0.01_deg',
+    'SOIL_clay_0.5cm_mean_0.01_deg',
+    'SOIL_nitrogen_60.100cm_mean_0.01_deg',
+    'SOIL_soc_0.5cm_mean_0.01_deg',
+    'SOIL_ocd_15.30cm_mean_0.01_deg',
+    'SOIL_ocs_0.30cm_mean_0.01_deg',
+    'SOIL_clay_30.60cm_mean_0.01_deg',
+    'MODIS_2000.2020_monthly_mean_surface_reflectance_band_02_._month_m3',
+    'SOIL_cfvo_15.30cm_mean_0.01_deg',
+    'SOIL_silt_100.200cm_mean_0.01_deg',
+    'MODIS_2000.2020_monthly_mean_surface_reflectance_band_02_._month_m8',
+    'SOIL_soc_30.60cm_mean_0.01_deg',
+    'SOIL_cfvo_5.15cm_mean_0.01_deg',
+    'MODIS_2000.2020_monthly_mean_surface_reflectance_band_02_._month_m12',
+    'MODIS_2000.2020_monthly_mean_surface_reflectance_band_05_._month_m10',
+    'SOIL_silt_0.5cm_mean_0.01_deg',
+    'MODIS_2000.2020_monthly_mean_surface_reflectance_band_02_._month_m7',
+    'SOIL_sand_100.200cm_mean_0.01_deg',
+    'MODIS_2000.2020_monthly_mean_surface_reflectance_band_05_._month_m3',
+    'MODIS_2000.2020_monthly_mean_surface_reflectance_band_05_._month_m12'
+    ]
 
     
     # EXTRA_COLOUMN =['VOD_C_2002_2018_multiyear_mean_m06',
@@ -288,13 +187,14 @@ CONFIG = Config()
 
 
 # %%
-wandb.login()
-wandb.init(project="cs680v3",group="swin_tf",name="swin_large_net_fine_tuned",
-        config = {
-    "LR_max": CONFIG.LR_MAX,
-    "WEIGHT_DECAY":CONFIG.WEIGHT_DECAY,
-    "train_batch" : CONFIG.TRAIN_BATCH_SIZE
-    })
+if CONFIG.WANDB_INIT:
+    wandb.login()
+    wandb.init(project="cs680v3",group="swin_tf",name="swinV2_large_self_fine_tuned_V4",
+            config = {
+        "LR_max": CONFIG.LR_MAX,
+        "WEIGHT_DECAY":CONFIG.WEIGHT_DECAY,
+        "train_batch" : CONFIG.TRAIN_BATCH_SIZE
+        })
 
 # %% [markdown]
 # # Preprocessing the Tabular Data And Image Transformation
@@ -322,7 +222,7 @@ scaling_pipeline = Pipeline(steps=[
 
 # %%
 # preparing the tabular data that has been given 
-BASE_DIR = os.path.join(os.getcwd() , 'data')
+BASE_DIR = CONFIG.BASE_DIR
 Train_DF = pd.read_csv(BASE_DIR  +  '/train.csv')
 Test_DF =  pd.read_csv(BASE_DIR  +  '/test.csv')
 Test_DF[log_tf_col] =1
@@ -381,19 +281,25 @@ CONFIG.N_STEPS = CONFIG.N_STEPS_PER_EPOCH * CONFIG.NUM_EPOCHS + 1
 MEAN = [0.485, 0.456, 0.406]
 STD = [0.229, 0.224, 0.225]
 TRAIN_TRANSFORMS = A.Compose([
-    A.Resize(CONFIG.TARGET_IMAGE_SIZE, CONFIG.TARGET_IMAGE_SIZE),
-    A.RandomCrop(width=CONFIG.TARGET_IMAGE_SIZE, height=CONFIG.TARGET_IMAGE_SIZE),  # Simulate different crops
-    #A.HorizontalFlip(p=0.5),  # Simulate left-right flips
-    #A.VerticalFlip(p=0.5),  # Simulate up-down flips
-    #A.RandomBrightnessContrast(brightness_limit=(-0.2, 0.2), contrast_limit=(-0.2, 0.2), p=0.5),  # Adjust brightness and contrast
-    #A.RandomRotate90(p=0.5),  # Simulate different rotations
-    A.GaussianBlur(blur_limit=(3, 7), p=0.5),  # Introduce slight blur
-    #A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.1, rotate_limit=15, p=0.5),  # Combine shift, scale, and rotation
-    #A.HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20, p=0.5),  # Adjust hue, saturation, and value
+    A.HorizontalFlip(p=0.25),
+    A.RandomResizedCrop(size=(CONFIG.TARGET_IMAGE_SIZE,CONFIG.TARGET_IMAGE_SIZE), interpolation=cv2.INTER_CUBIC ,p=0.5),  # Simulate different crops
+    A.Resize(CONFIG.TARGET_IMAGE_SIZE,CONFIG.TARGET_IMAGE_SIZE),
+    A.RandomBrightnessContrast(brightness_limit=0.1, contrast_limit=0.1, p=0.25),
+    A.ImageCompression(quality_lower=85, quality_upper=100, p=0.25), 
+    #A.GaussianBlur(blur_limit=(3, 7), p=0.5),  # Introduce slight blur
     A.ToFloat(),
     A.Normalize(mean=MEAN, std=STD, max_pixel_value=1),
     ToTensorV2(),
 ])
+
+TEST_TRANSFORMS = A.Compose([
+    A.Resize(CONFIG.TARGET_IMAGE_SIZE,CONFIG.TARGET_IMAGE_SIZE),
+    #A.CenterCrop(CONFIG.TARGET_IMAGE_SIZE,CONFIG.TARGET_IMAGE_SIZE),
+    A.ToFloat(),
+    A.Normalize(mean=MEAN, std=STD, max_pixel_value=1),
+    ToTensorV2(),
+])
+
 
 # TRAIN_TRANSFORMS = A.Compose([
 #     #A.HorizontalFlip(p=0.5),
@@ -405,12 +311,12 @@ TRAIN_TRANSFORMS = A.Compose([
 #     ToTensorV2(),
 # ])
 
-TEST_TRANSFORMS = A.Compose([
-    A.Resize(CONFIG.TARGET_IMAGE_SIZE, CONFIG.TARGET_IMAGE_SIZE),
-    A.ToFloat(),
-    A.Normalize(mean=MEAN, std=STD, max_pixel_value=1),
-    ToTensorV2(),
-])
+# TEST_TRANSFORMS = A.Compose([
+#     A.Resize(CONFIG.TARGET_IMAGE_SIZE, CONFIG.TARGET_IMAGE_SIZE),
+#     A.ToFloat(),
+#     A.Normalize(mean=MEAN, std=STD, max_pixel_value=1),
+#     ToTensorV2(),
+# ])
 
 
 # %% [markdown]
@@ -453,6 +359,13 @@ validation_dataset = create_dataset(
     transforms= TEST_TRANSFORMS
 )
 
+test_dataset = create_dataset(
+    X_jpeg_bytes = test_tabular_scaled['jpeg_bytes'].values,
+    X_tabular = test_tabular_scaled[CONFIG.EXTRA_COLOUMN].values.astype(np.float32),
+    y = test_tabular_scaled["id"].values,
+    transforms= TEST_TRANSFORMS
+    )
+
 train_dataloader = DataLoader(
     train_dataset,
     batch_size=CONFIG.TRAIN_BATCH_SIZE,
@@ -468,13 +381,6 @@ validation_dataloader = DataLoader(
     drop_last=False,
     num_workers= 0 #psutil.cpu_count(),
 )
-
-test_dataset = create_dataset(
-    X_jpeg_bytes = test_tabular_scaled['jpeg_bytes'].values,
-    X_tabular = test_tabular_scaled[CONFIG.EXTRA_COLOUMN].values.astype(np.float32),
-    y = test_tabular_scaled[CONFIG.TRAITS_NAME].values.astype(np.float32),
-    transforms= TEST_TRANSFORMS
-    )
 
 test_dataloader = DataLoader(
     test_dataset,
@@ -501,17 +407,23 @@ fig.tight_layout()
 # # Define the Image Backbone and Tabular Model
 
 # %%
-class ImageBackbone_swin(nn.Module):
+   
+   # load custom model
+   # get weight
+   # model.backbone get weight
+class ImageBackbone_swinV2(nn.Module):
     def __init__(self, backbone_name, weight_path, out_features, fixed_feature_extractor=False):
         super().__init__()
         self.out_features = out_features
-        self.backbone =timm.create_model('swin_large_patch4_window12_384.ms_in22k_ft_in1k', pretrained=False, num_classes=CONFIG.N_TARGETS) # timm.create_model('swin_large_patch4_window12_384.ms_in22k_ft_in1k', pretrained=True, num_classes=CONFIG.N_TARGETS)
-        self.backbone.load_state_dict(torch.load(weight_path))
+        self.backbone =timm.create_model('swinv2_large_window12to16_192to256.ms_in22k_ft_in1k', pretrained=False, num_classes=CONFIG.N_TARGETS) # timm.create_model('swin_large_patch4_window12_384.ms_in22k_ft_in1k', pretrained=True, num_classes=CONFIG.N_TARGETS)
+        swin_fine_tuned_weight = torch.load(weight_path)
+        swin_fine_tuned_weight  = {key.replace("img_backbone.backbone.", ""): value for key, value in swin_fine_tuned_weight.items()}
+        self.backbone.load_state_dict(swin_fine_tuned_weight)
         if fixed_feature_extractor:
             for param in self.backbone.parameters():
                 param.requires_grad = False
         in_features = self.backbone.num_features
-        
+
         self.backbone.head = nn.Identity()
         self.head = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
@@ -521,47 +433,19 @@ class ImageBackbone_swin(nn.Module):
 
     def forward(self, x):
         x = self.backbone(x)
-        print(x.shape)
         x = x.permute(0, 3, 1, 2)
         return self.head(x)
-    
-    
-class ImageBackbone_dinoV2(nn.Module):
-    def __init__(self, backbone_name, weight_path, out_features, fixed_feature_extractor=False):
-        super().__init__()
-        self.out_features = out_features
-        self.backbone = timm.create_model('vit_large_patch14_dinov2.lvd142m', pretrained=True, num_classes=0) #remove classifier nn.Linear
-        #self.backbone = backbone_.forward_head(backbone_, pre_logits=True)
-        if fixed_feature_extractor:
-            for param in self.backbone.parameters():
-                param.requires_grad = False
-        in_features = self.backbone.num_features
-        self.backbone.forward_head= nn.Identity()
-        self.head = nn.Sequential(
-            nn.AdaptiveAvgPool1d(out_features),
-            #nn.Flatten(),
-            # nn.Linear(in_features, out_features),
-        )
-
-    def forward(self, x):
-        x = self.backbone(x)
-        #print(x.shape)
-        x = x[:,  None,:]
-        #print(x.shape)
-        tt = self.head(x)
-        #print(tt.shape)
-        return tt
 
 class TabularBackbone(nn.Module):
     def __init__(self, n_features, out_features):
         super().__init__()
         self.out_features = out_features
         self.fc = nn.Sequential(
-            nn.Linear(n_features, 128),
-            nn.BatchNorm1d(128),
+            nn.Linear(n_features, 256),
+            nn.BatchNorm1d(256),
             nn.GELU(),
             nn.Dropout(0.1),
-            nn.Linear(128, out_features),
+            nn.Linear(256, out_features),
         )
 
     def forward(self, x):
@@ -572,64 +456,39 @@ class TabularBackbone(nn.Module):
 # %% [markdown]
 # # Combine the image feature extraction model with tabular feature extraction model 
 
-# %%
-def initialize_timm_model( model_name   , tim_num_class=0.0, fine_tuned_weight = None,fixed_feature_extractor=False):
-    model_ft  = None
-    if model_name == "resnet34" :
-        """ Resnet34 """
-        model = timm.create_model('resnet34' , num_classes=tim_num_class )
-        return model
-    if model_name == "Swin_Transformer":
-        model = timm.create_model('swin_tiny_patch4_window7_224.ms_in22k' , pretrained=True , num_classes = tim_num_class)
-        return model 
-    if model_name == "swin_large":
-        if fine_tuned_weight!=None:
-            model = ImageBackbone_swin(model_name,fine_tuned_weight , tim_num_class,fixed_feature_extractor)
-        else:
-            model = None #timm.create_model('swin_large_patch4_window12_384.ms_in22k_ft_in1k',pretrained=True, num_classes = tim_num_class)
-            #model.load_state_dict(torch.load(weight_path))
-            model.head.drop = nn.Dropout(p=0.1,inplace=False)
-        return model
-    if model_name =="convnextv2":
-        model = timm.create_model('convnext_tiny.in12k_ft_in1k_384',num_classes=tim_num_class)
-        return model     
-    if model_name == "efficientnet_v2":
-        model = timm.create_model("efficientnet_b2.ra_in1k",pretrained = True)
-        model.classifier = nn.Dropout(p=0.2,inplace=False)
-        return model
-    if model_name == "dinoV2":
-        model = ImageBackbone_dinoV2(model_name,weight_path=None , out_features=tim_num_class,fixed_feature_extractor=fixed_feature_extractor)
-        return model
 
 
-# tm_model = initialize_timm_model("swin_large",tim_num_class=CONFIG.TIM_NUM_CLASS)
-# data_config = timm.data.resolve_model_data_config(tm_model)
-# transforms = timm.data.create_transform(**data_config, is_training=True)
 
-
+#backbone_name, weight_path, out_features, fixed_feature_extractor=False
 # %%
 class CustomModel(nn.Module):
-    def __init__(self,input_channels,out_channels, target_features_num , tim_num_class , model_name):
+    def __init__(self,model_name , fine_tuned_img_weights , img_out_features , fixed_feature_extractor , traits_target_feature):
         super().__init__()
-        self.img_backbone = initialize_timm_model(model_name=model_name ,tim_num_class=tim_num_class , fine_tuned_weight = CONFIG.TIMM_FINED_TUNED_WEIGHT,fixed_feature_extractor=True)
+        self.img_backbone =  ImageBackbone_swinV2(backbone_name = model_name,weight_path = fine_tuned_img_weights ,out_features =  img_out_features ,fixed_feature_extractor=fixed_feature_extractor)
         self.extra_features_model = TabularBackbone(n_features  = len(CONFIG.EXTRA_COLOUMN) , out_features=64)
         self.fc = nn.Sequential(
-            nn.Linear(self.extra_features_model.out_features + self.img_backbone.out_features, 256),  #1024
-            nn.BatchNorm1d(256),
+            nn.Linear(self.extra_features_model.out_features + self.img_backbone.out_features,1024 ),  # 256
+            nn.BatchNorm1d(1024),
             nn.GELU(),
             nn.Dropout(0.1),
-            nn.Linear(256, 128), #256
-            nn.BatchNorm1d(128),
+            nn.Linear(1024, 512), #256
+            nn.BatchNorm1d(512),
+            nn.GELU(),
+            nn.Linear(512, 64), #256
+            nn.BatchNorm1d(64),
             nn.GELU(),
             #nn.Dropout(0.1),
-            nn.Linear(128, target_features_num),
+            nn.Linear(64, traits_target_feature),
         )        
     def forward(self,image,x):
-        output_image = self.img_backbone(image) # bach * (hight*col)
-        z = self.extra_features_model(x) # batch * 16
+        output_image = self.img_backbone(image) 
+        z = self.extra_features_model(x) 
         inputs  = torch.cat((output_image,z), 1 )
         output = self.fc(inputs)
         return output
+
+
+# to save model 
 class BestModelSaveCallback:
     def __init__(self, save_path):
         self.save_path = save_path
@@ -639,23 +498,41 @@ class BestModelSaveCallback:
         if accuracy > self.best_accuracy:
             self.best_accuracy = accuracy
             model.to(device = "cpu")
-            torch.save(model, self.save_path)
+            torch.save(model.state_dict(), self.save_path)
             model.to(device=DEVICE)
+            
+            print("generating result on test data")
+            submission_df = pd.DataFrame(columns=CONFIG.TRAITS_NAME)
+            for index , batch in tqdm.tqdm(enumerate(iter(test_dataloader))):
+                X_img_test = batch[0] 
+                X_features  = batch[1]
+                test_id  = batch[2]
+                #print(batch) 
+                with torch.no_grad():
+                    #print(X_img_test.shape, X_features.shape)
+                    y_pred = model(X_img_test.to(DEVICE),X_features.to(DEVICE)).detach().cpu().numpy()  #,X_features.to(DEVICE)
+                
+                    pred_pd = pd.DataFrame(columns=CONFIG.EXTRA_COLOUMN + CONFIG.TRAITS_NAME)
+                    pred_pd[CONFIG.EXTRA_COLOUMN] =-1
+                    pred_pd[CONFIG.TRAITS_NAME] = y_pred 
+
+                    temp1 =   scaling_pipeline['std_scale']['scale'].inverse_transform(pred_pd)
+                    temp2=    pd.DataFrame(temp1, columns=CONFIG.EXTRA_COLOUMN + CONFIG.TRAITS_NAME)
+                    pred_final =   scaling_pipeline['log']['log'].inverse_transform(temp2[CONFIG.TRAITS_NAME])
+                    #pred_final["id"] = test_id.cpu().detach().numpy()
+                    submission_df = pd.concat([submission_df, pred_final.assign(id=test_id.cpu().detach().numpy())], ignore_index=True)
+            # submission_df.to_csv('submission_self_tuning.csv', index=False)
+            submission_df[["id"]  + CONFIG.TRAITS_NAME ].to_csv('submission_tuned_with_weight_swinV3.csv', index=False)
+            print("Submit!")
 
 
+
+
+# input_channels = len(CONFIG.EXTRA_COLOUMN) ,out_channels =CONFIG.TABULAR_NN_OUTPUT, target_features_num= len(CONFIG.TRAITS_NAME), tim_num_class=CONFIG.TIM_NUM_CLASS , model_name=CONFIG.TIM_MODEL_NAME
 # %%
-if CONFIG.TIM_MODEL_NAME == "swin_large":
-    if CONFIG.INCLUDE_EXTRA_FEATURES:
-        model = CustomModel(input_channels = len(CONFIG.EXTRA_COLOUMN) ,out_channels =CONFIG.TABULAR_NN_OUTPUT, target_features_num= len(CONFIG.TRAITS_NAME), tim_num_class=CONFIG.TIM_NUM_CLASS , model_name=CONFIG.TIM_MODEL_NAME)
-    else:
-        model = initialize_timm_model(model_name=CONFIG.TIM_MODEL_NAME , tim_num_class = len(CONFIG.TRAITS_NAME) )    
-    model.to(device = DEVICE)
-elif CONFIG.TIM_MODEL_NAME == "dinoV2":
-    if CONFIG.INCLUDE_EXTRA_FEATURES:
-        model = CustomModel(input_channels = len(CONFIG.EXTRA_COLOUMN) ,out_channels =CONFIG.TABULAR_NN_OUTPUT, target_features_num= len(CONFIG.TRAITS_NAME), tim_num_class=CONFIG.TIM_NUM_CLASS , model_name=CONFIG.TIM_MODEL_NAME)
-    else:
-        model = initialize_timm_model(model_name=CONFIG.TIM_MODEL_NAME , tim_num_class = len(CONFIG.TRAITS_NAME) )    
-    model.to(device = DEVICE)
+model = CustomModel(model_name=CONFIG.IMG_MODEL_NAME , fine_tuned_img_weights= CONFIG.IMG_FINED_TUNED_WEIGHT,img_out_features = CONFIG.IMG_OUT_FEATURES, fixed_feature_extractor=True,traits_target_feature = CONFIG.N_TARGETS )
+model.to(DEVICE)      
+
 
 
 # %%
@@ -727,19 +604,6 @@ LOSS_FN = nn.SmoothL1Loss() # r2_loss
 LR_SCHEDULER = get_lr_scheduler(optimizer)
 
 # %%
-# MSE = torcheval.metrics.regression.MeanSquaredError().to(DEVICE)
-# y_pred = torch.ones(13,6).to(DEVICE)
-# y = torch.randn(13,6).to(DEVICE)
-# MSE.update(y_pred,y)
-# MSE.compute().item()
-
-# %%
-# y_pred = torch.ones(13,6).to(DEVICE)
-# y = torch.randn(13,6).to(DEVICE)
-# MSE.update(y_pred,y)
-# MSE.compute().item()
-
-# %%
 def train_batch(inputs,model):
     model.train()  
     #X_image, X_tabular, y_true
@@ -769,25 +633,6 @@ def train_batch(inputs,model):
     R2sc.update(y_pred , y )
     return LOSS.avg.detach().cpu().numpy() ,MSE.compute().item() ,R2sc.compute().item()
 
-@torch.no_grad
-def do_prediction(inputs,model, is_val=False):
-    global Train_std_tensor , Train_mean_tensor
-    model.eval()
-    if  CONFIG.INCLUDE_EXTRA_FEATURES:
-        x,z,y = inputs
-        x = x.to(DEVICE)
-        y = y.to(DEVICE)
-        z = z.to(DEVICE)
-        prediction = model(x,z)
-    else:
-        x,y = inputs
-        x = x.to(DEVICE)
-        y = y.to(DEVICE)
-        prediction = model(x)
-    if is_val :
-        prediction =prediction
-
-
 @torch.no_grad()
 def validation_loss_batch(inputs,model):
     global Train_std_tensor , Train_mean_tensor
@@ -810,13 +655,6 @@ def validation_loss_batch(inputs,model):
     R2sc_val.update(prediction , y )
     return LOSS_val.avg.detach().cpu().numpy() ,MSE_val.compute().item() ,R2sc_val.compute().item()
 
-def utils_convert_to_2d_tensors(predictions,targets):
-    predictions  = np.array(predictions)
-    targets = np.array(targets)
-    predictions  = np.reshape(predictions , (-1, predictions.shape[-1]))
-    targets  = np.reshape(targets  , (-1 , targets.shape[-1]))
-    return torch.Tensor(predictions), torch.Tensor(targets)
-
 def train(trainLoader,valLoader,model,num_epochs,best_model_callback):
     #wandb.watch(model,loss_function,log = "all",log_freq=50)
     
@@ -825,7 +663,8 @@ def train(trainLoader,valLoader,model,num_epochs,best_model_callback):
     
     
     for epoch in range(num_epochs):
-        wandb.log({"epoch":epoch })
+        if CONFIG.WANDB_INIT :
+            wandb.log({"epoch":epoch })
         # print(f"epoch: {epoch} , lr is { LR_SCHEDULER.get_last_lr()}" )
         train_loss_current_epoch ,train_mse_current_epoch, train_r2_current_epoch = [] , [] , []
         MSE.reset()
@@ -833,6 +672,7 @@ def train(trainLoader,valLoader,model,num_epochs,best_model_callback):
         LOSS.reset()
         # batch training loss
         with tqdm.tqdm(total=len(trainLoader)) as trainingLoop:
+            
             for index,batch in enumerate(iter(trainLoader)): 
         
                 loss,mse_ , r2_ = train_batch(batch,model)
@@ -844,7 +684,8 @@ def train(trainLoader,valLoader,model,num_epochs,best_model_callback):
                 #print(loss , mse_,  r2_ ,LR_SCHEDULER.get_last_lr())
                 #trainingLoop.set_postfix({ "Training batch" : index , "loss is" : loss , "MSE" :  mse_ , "R2":  r2_, "lr was":  LR_SCHEDULER.get_last_lr()[0] })
                 #trainingLoop.update(1)
-                wandb.log({"Training-Loss":loss  , "Training-MSE" :  mse_ , "Training-R2":  r2_ })
+                if CONFIG.WANDB_INIT:
+                    wandb.log({"Training-Loss":loss  , "Training-MSE" :  mse_ , "Training-R2":  r2_ })
         
         # train_epoch_loss.append(np.array(train_loss_current_epoch).mean() )
         # train_epoch_r2.append(np.array(train_r2_current_epoch).mean())
@@ -867,16 +708,9 @@ def train(trainLoader,valLoader,model,num_epochs,best_model_callback):
                 #validationLoop.set_postfix({ "Validation batch" : index , "loss is" : loss , "MSE" :  mse_ , "R2":  val_r2 })
                 ##wandb.log({"Vlaidation loss" : loss})
                 #validationLoop.update(1)
-            wandb.log({"Validation-Loss":loss  , "Validation-MSE" :  mse_ , "Validation-R2":  val_r2 })
-
-
-        # val_epoch_loss.append(np.array(val_loss_current_epoch).mean())
-        #val_epoch_r2.append(np.array(r2_).mean())
-        # val_epoch_mse.append(np.array(mse_).mean())
-        
-        # print(f"epoch:{epoch}, Training (avg) loss : {train_epoch_loss[-1]} , Validation loss (avg) = {val_epoch_loss[-1]}")
-        # print(f"epoch:{epoch}, Training (avg) r2 : {train_epoch_r2[-1]} , Validation r2(avg) = {val_epoch_r2[-1]}")
-        
+            if CONFIG.WANDB_INIT:
+                wandb.log({"Validation-Loss":loss  , "Validation-MSE" :  mse_ , "Validation-R2":  val_r2 })
+       
         best_model_callback(val_r2,model)        # save the best model according to the validation accuracy
         
         
@@ -884,14 +718,14 @@ def train(trainLoader,valLoader,model,num_epochs,best_model_callback):
 
 
 # %%
+#model.load_state_dict(torch.load('/home/prajwal/cs680/cs680_kaggle/data/swinV2_large_self_fine_tuned_V3.pth'))
+MODEL_NAME_SAVE = 'swinV2_large_self_fine_tuned_V4.pth'
+best_model_callback = BestModelSaveCallback(save_path=os.path.join(CONFIG.BASE_DIR,MODEL_NAME_SAVE))
+train_losses, val_losses , train_accuracies,val_accuracies = train(train_dataloader,validation_dataloader,model,CONFIG.NUM_EPOCHS,best_model_callback)
 
-# MODEL_NAME_SAVE = 'swin_large_net_fine_tuned.pth'
-# best_model_callback = BestModelSaveCallback(save_path=os.path.join(CONFIG.BASE_DIR,MODEL_NAME_SAVE))
-# train_losses, val_losses , train_accuracies,val_accuracies = train(train_dataloader,validation_dataloader,model,CONFIG.NUM_EPOCHS,best_model_callback)
-
-model.load_state_dict(torch.load('/home/prajwal/cs680/cs680_kaggle/data/swin_large_net_fine_tuned.pth'))
 # %%
-model.eval()
+#model.load_state_dict(torch.load('/home/prajwal/cs680/cs680_kaggle/data/swinV2_large_self_fine_tuned_V3.pth'))
+submission_df = pd.DataFrame(columns=CONFIG.TRAITS_NAME)
 for index , batch in tqdm.tqdm(enumerate(iter(test_dataloader))):
     X_img_test = batch[0] 
     X_features  = batch[1]
@@ -899,7 +733,7 @@ for index , batch in tqdm.tqdm(enumerate(iter(test_dataloader))):
     #print(batch) 
     with torch.no_grad():
         #print(X_img_test.shape, X_features.shape)
-        y_pred = model(X_img_test.to(DEVICE) ,X_features.to(DEVICE) ).detach().cpu().numpy()  #,X_features.to(DEVICE)
+        y_pred = model(X_img_test.to(DEVICE),X_features.to(DEVICE)).detach().cpu().numpy()  #,X_features.to(DEVICE)
     
         pred_pd = pd.DataFrame(columns=CONFIG.EXTRA_COLOUMN + CONFIG.TRAITS_NAME)
         pred_pd[CONFIG.EXTRA_COLOUMN] =-1
@@ -910,7 +744,8 @@ for index , batch in tqdm.tqdm(enumerate(iter(test_dataloader))):
         pred_final =   scaling_pipeline['log']['log'].inverse_transform(temp2[CONFIG.TRAITS_NAME])
         #pred_final["id"] = test_id.cpu().detach().numpy()
         submission_df = pd.concat([submission_df, pred_final.assign(id=test_id.cpu().detach().numpy())], ignore_index=True)
-submission_df.to_csv('submission_net_tuned_swin_large.csv', index=False)
+# submission_df.to_csv('submission_self_tuning.csv', index=False)
+submission_df[["id"]  + CONFIG.TRAITS_NAME ].to_csv('submission_tuned_with_weight_swinV3.csv', index=False)
 print("Submit!")
 
 # %%

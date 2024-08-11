@@ -27,7 +27,14 @@ plt.style.use('ggplot')
 plt.rcParams.update(**{'figure.dpi':150})
 import psutil
 import imageio.v3 as imageio
-
+import pandas as pd
+import numpy as np
+from sklearn.preprocessing import MinMaxScaler, FunctionTransformer
+from sklearn.compose import ColumnTransformer
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler , MinMaxScaler
+import scipy as sp
 # %%
 RANDOM_NUMBER = 42
 torch.manual_seed(RANDOM_NUMBER)
@@ -41,14 +48,7 @@ DEVICE = torch.device("cuda:1" if torch.cuda.is_available() else  "cpu") #"cuda:
 torch.cuda.empty_cache()
 
 # %%
-import pandas as pd
-import numpy as np
-from sklearn.preprocessing import MinMaxScaler, FunctionTransformer
-from sklearn.compose import ColumnTransformer
-from sklearn.linear_model import LogisticRegression
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler , MinMaxScaler
-import scipy as sp
+
 
 # %%
 class Config():
@@ -56,8 +56,8 @@ class Config():
     BASE_DIR = os.path.join(os.getcwd() , 'data')
     train_df = pd.read_csv(BASE_DIR  +  '/train.csv')
     TRAIN_VAL_SPLIT_SIZE = 0.14
-    TRAIN_BATCH_SIZE = 24
-    VAL_BATCH_SIZE =  2
+    TRAIN_BATCH_SIZE =24
+    VAL_BATCH_SIZE =  12
     TEST_BATCH_SIZE = 2
     LR_MAX = 1e-4
     NUM_EPOCHS = 10
@@ -246,7 +246,7 @@ CONFIG = Config()
 # %%
 if CONFIG.WANDB_INIT:
     wandb.login()
-    wandb.init(project="cs680v3",group="dinoV2_fine_tuning",name="swinV2_fine_tuning",
+    wandb.init(project="cs680v3",group="dinoV2_fine_tuning",name="swinV2_fine_tuning_2",
         config = {
         "LR_max": CONFIG.LR_MAX,
         "WEIGHT_DECAY":CONFIG.WEIGHT_DECAY,
@@ -330,10 +330,6 @@ CONFIG.N_STEPS = CONFIG.N_STEPS_PER_EPOCH * CONFIG.NUM_EPOCHS + 1
 
 
 
-
-
-
-
 # %%
 # %%
 # Image PreProcessing
@@ -341,9 +337,12 @@ CONFIG.N_STEPS = CONFIG.N_STEPS_PER_EPOCH * CONFIG.NUM_EPOCHS + 1
 MEAN = [0.485, 0.456, 0.406]
 STD = [0.229, 0.224, 0.225]
 TRAIN_TRANSFORMS = A.Compose([
-    A.RandomResizedCrop(size=(CONFIG.TARGET_IMAGE_SIZE,CONFIG.TARGET_IMAGE_SIZE), interpolation=cv2.INTER_CUBIC),  # Simulate different crops
-    #A.HorizontalFlip(p=0.2),  
-    A.GaussianBlur(blur_limit=(3, 7), p=0.5),  # Introduce slight blur
+    A.HorizontalFlip(p=0.25),
+    A.RandomResizedCrop(size=(CONFIG.TARGET_IMAGE_SIZE,CONFIG.TARGET_IMAGE_SIZE), interpolation=cv2.INTER_CUBIC ,p=0.5),  # Simulate different crops
+    A.Resize(CONFIG.TARGET_IMAGE_SIZE,CONFIG.TARGET_IMAGE_SIZE),
+    A.RandomBrightnessContrast(brightness_limit=0.1, contrast_limit=0.1, p=0.25),
+    A.ImageCompression(quality_lower=85, quality_upper=100, p=0.25), 
+    #A.GaussianBlur(blur_limit=(3, 7), p=0.5),  # Introduce slight blur
     A.ToFloat(),
     A.Normalize(mean=MEAN, std=STD, max_pixel_value=1),
     ToTensorV2(),
@@ -470,6 +469,32 @@ class BestModelSaveCallback:
             model.to(device = "cpu")
             torch.save(model.state_dict(), self.save_path)
             model.to(device=DEVICE)
+            model.eval()
+            print("saving fine tuning test predictions")
+            submission_df = pd.DataFrame(columns=CONFIG.TRAITS_NAME)
+            for index , batch in tqdm.tqdm(enumerate(iter(test_dataloader))):
+                X_img_test = batch[0] 
+                X_features  = batch[1]
+                test_id  = batch[2]
+                #print(batch) 
+                with torch.no_grad():
+                    #print(X_img_test.shape, X_features.shape)
+                    y_pred = model(X_img_test.to(DEVICE),X_features.to(DEVICE)).detach().cpu().numpy()  #,X_features.to(DEVICE)
+                
+                    pred_pd = pd.DataFrame(columns=CONFIG.EXTRA_COLOUMN + CONFIG.TRAITS_NAME)
+                    pred_pd[CONFIG.EXTRA_COLOUMN] =-1
+                    pred_pd[CONFIG.TRAITS_NAME] = y_pred 
+
+                    temp1 =   scaling_pipeline['std_scale']['scale'].inverse_transform(pred_pd)
+                    temp2=    pd.DataFrame(temp1, columns=CONFIG.EXTRA_COLOUMN + CONFIG.TRAITS_NAME)
+                    pred_final =   scaling_pipeline['log']['log'].inverse_transform(temp2[CONFIG.TRAITS_NAME])
+                    #pred_final["id"] = test_id.cpu().detach().numpy()
+                    submission_df = pd.concat([submission_df, pred_final.assign(id=test_id.cpu().detach().numpy())], ignore_index=True)
+            # submission_df.to_csv('submission_self_tuning.csv', index=False)
+            submission_df[["id"]  + CONFIG.TRAITS_NAME ].to_csv('submission_tuned_SWinv2_2.csv', index=False)
+            print("Submit!")
+            
+            
 
 
 # %%
@@ -684,11 +709,16 @@ def train(trainLoader,valLoader,model,num_epochs,best_model_callback):
 
 
 # %%
-MODEL_NAME_SAVE = 'swin_v2_fine_self_tuning.pth'
+MODEL_NAME_SAVE = 'swin_v2_2_fine_self_tuning.pth'
 best_model_callback = BestModelSaveCallback(save_path=os.path.join(CONFIG.BASE_DIR,MODEL_NAME_SAVE))
 train_losses, val_losses , train_accuracies,val_accuracies = train(train_dataloader,validation_dataloader,model,CONFIG.NUM_EPOCHS,best_model_callback)
 
 # %%
+
+# swinV2 = torch.load('/home/prajwal/cs680/cs680_kaggle/data/swin_v2_fine_self_tuning2.pth')
+# model.load_state_dict(swinV2)
+# model.to(DEVICE)
+model.eval()
 submission_df = pd.DataFrame(columns=CONFIG.TRAITS_NAME)
 for index , batch in tqdm.tqdm(enumerate(iter(test_dataloader))):
     X_img_test = batch[0] 
@@ -697,7 +727,7 @@ for index , batch in tqdm.tqdm(enumerate(iter(test_dataloader))):
     #print(batch) 
     with torch.no_grad():
         #print(X_img_test.shape, X_features.shape)
-        y_pred = model(X_img_test.to(DEVICE)).detach().cpu().numpy()  #,X_features.to(DEVICE)
+        y_pred = model(X_img_test.to(DEVICE),X_features.to(DEVICE)).detach().cpu().numpy()  #,X_features.to(DEVICE)
     
         pred_pd = pd.DataFrame(columns=CONFIG.EXTRA_COLOUMN + CONFIG.TRAITS_NAME)
         pred_pd[CONFIG.EXTRA_COLOUMN] =-1
@@ -709,7 +739,7 @@ for index , batch in tqdm.tqdm(enumerate(iter(test_dataloader))):
         #pred_final["id"] = test_id.cpu().detach().numpy()
         submission_df = pd.concat([submission_df, pred_final.assign(id=test_id.cpu().detach().numpy())], ignore_index=True)
 # submission_df.to_csv('submission_self_tuning.csv', index=False)
-submission_df[["id"]  + CONFIG.TRAITS_NAME ].to_csv('submission_tuned_dinoV2.csv', index=False)
+submission_df[["id"]  + CONFIG.TRAITS_NAME ].to_csv('submission_tuned_SWinv2_2.csv', index=False)
 print("Submit!")
 
 
