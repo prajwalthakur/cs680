@@ -55,8 +55,8 @@ class Config():
     BASE_DIR = os.path.join(os.getcwd() , 'data')
     train_df = pd.read_csv(BASE_DIR  +  '/train.csv')
     TRAIN_VAL_SPLIT_SIZE = 0.18
-    TRAIN_BATCH_SIZE = 64
-    VAL_BATCH_SIZE = 64
+    TRAIN_BATCH_SIZE = 256
+    VAL_BATCH_SIZE = 256
     TEST_BATCH_SIZE =64
     LR_MAX = 1e-4 
     NUM_EPOCHS = 20
@@ -69,7 +69,7 @@ class Config():
     WANDB_INIT =  True
     FOLD = 0 # Which fold to set as validation data
     IMAGE_SIZE =128
-    TARGET_IMAGE_SIZE =  384
+    TARGET_IMAGE_SIZE =  224
     T_MAX =        9
     torch.manual_seed(RANDOM_NUMBER)
     INCLUDE_EXTRA_FEATURES = True
@@ -77,9 +77,9 @@ class Config():
     WEIGHT_DECAY = 0.01
     TABULAR_NN_OUTPUT  =   128 # 256
     IMG_MODEL_NAME = "swinV2" #"efficientnet_v2" # 
-    IMG_FINED_TUNED_WEIGHT = f'{BASE_DIR}/swinV2.pth'
+    IMG_FINED_TUNED_WEIGHT =None # f'{BASE_DIR}/swinV2.pth'
     Lower_Quantile = 0.005
-    Upper_Quantile = 0.985 #0.985
+    Upper_Quantile = 0.98 
     # use XGBBOOST to find prominant features
     EXTRA_COLOUMN = [
         'WORLDCLIM_BIO1_annual_mean_temperature',
@@ -189,7 +189,7 @@ CONFIG = Config()
 # %%
 if CONFIG.WANDB_INIT:
     wandb.login()
-    wandb.init(project="cs680v3",group="swin_tf",name="submission_model8",
+    wandb.init(project="cs680v3",group="swin_tf",name="submission_swin_with_table_large_224",
             config = {
         "LR_max": CONFIG.LR_MAX,
         "WEIGHT_DECAY":CONFIG.WEIGHT_DECAY,
@@ -261,7 +261,7 @@ train_tabular_scaled =  training_scaling_pipeline.fit_transform(train_df)
 validation_tabular_scaled = training_scaling_pipeline.transform(val_df)
 
 test_tabular_scaled = training_scaling_pipeline.transform(Test_DF)
-Test_DF[log_tf_col]
+# Test_DF[log_tf_col]
 "inverse"
 # tt =   scaling_pipeline['std_scale']['scale'].inverse_transform(train_tabular_scaled[CONFIG.EXTRA_COLOUMN + CONFIG.TRAITS_NAME])
 # tt = pd.DataFrame(tt, columns=CONFIG.EXTRA_COLOUMN + CONFIG.TRAITS_NAME)
@@ -415,9 +415,9 @@ class ImageBackbone_swinV2(nn.Module):
     def __init__(self, backbone_name, weight_path, out_features, fixed_feature_extractor=False):
         super().__init__()
         self.out_features = out_features
-        self.backbone =timm.create_model('swin_large_patch4_window12_384.ms_in22k_ft_in1k', pretrained=False, num_classes=CONFIG.N_TARGETS) # timm.create_model('swin_large_patch4_window12_384.ms_in22k_ft_in1k', pretrained=True, num_classes=CONFIG.N_TARGETS)
-        swin_fine_tuned_weight = torch.load("/home/prajwal/cs680/cs680_kaggle/data/model_08.pth")
-        # swin_fine_tuned_weight  = {key.replace("img_backbone.backbone.", ""): value for key, value in swin_fine_tuned_weight.items()}
+        self.backbone =timm.create_model('swin_large_patch4_window7_224.ms_in22k', pretrained=False, num_classes=CONFIG.N_TARGETS) # timm.create_model('swin_large_patch4_window12_384.ms_in22k_ft_in1k', pretrained=True, num_classes=CONFIG.N_TARGETS)
+        swin_fine_tuned_weight = torch.load("/home/prajwal/cs680/cs680_kaggle/data/swin_large_fine_tuning_train.pth")
+        swin_fine_tuned_weight  = {key.replace("img_backbone.backbone.", ""): value for key, value in swin_fine_tuned_weight.items()}
         self.backbone.load_state_dict(swin_fine_tuned_weight)
         if fixed_feature_extractor:
             for param in self.backbone.parameters():
@@ -517,12 +517,12 @@ class BestModelSaveCallback:
                     pred_pd[CONFIG.TRAITS_NAME] = y_pred 
 
                     temp1 =   scaling_pipeline['std_scale']['scale'].inverse_transform(pred_pd)
-                    temp2=    pd.DataFrame(temp1, columns=CONFIG.EXTRA_COLOUMN + CONFIG.TRAITS_NAME)
+                    temp2 =    pd.DataFrame(temp1, columns=CONFIG.EXTRA_COLOUMN + CONFIG.TRAITS_NAME)
                     pred_final =   scaling_pipeline['log']['log'].inverse_transform(temp2[CONFIG.TRAITS_NAME])
                     #pred_final["id"] = test_id.cpu().detach().numpy()
                     submission_df = pd.concat([submission_df, pred_final.assign(id=test_id.cpu().detach().numpy())], ignore_index=True)
             # submission_df.to_csv('submission_self_tuning.csv', index=False)
-            submission_df[["id"]  + CONFIG.TRAITS_NAME ].to_csv('submission_model8.csv', index=False)
+            submission_df[["id"]  + CONFIG.TRAITS_NAME ].to_csv('submission_swin_large_with_table_224.csv', index=False)
             print("Submit!")
 
 
@@ -719,7 +719,7 @@ def train(trainLoader,valLoader,model,num_epochs,best_model_callback):
 
 # %%
 #model.load_state_dict(torch.load('/home/prajwal/cs680/cs680_kaggle/data/swinV2_large_self_fine_tuned_V3.pth'))
-MODEL_NAME_SAVE = 'submission_model8.pth'
+MODEL_NAME_SAVE = 'submission_swin_with_table_large_224.pth'
 best_model_callback = BestModelSaveCallback(save_path=os.path.join(CONFIG.BASE_DIR,MODEL_NAME_SAVE))
 train_losses, val_losses , train_accuracies,val_accuracies = train(train_dataloader,validation_dataloader,model,CONFIG.NUM_EPOCHS,best_model_callback)
 
@@ -745,7 +745,7 @@ for index , batch in tqdm.tqdm(enumerate(iter(test_dataloader))):
         #pred_final["id"] = test_id.cpu().detach().numpy()
         submission_df = pd.concat([submission_df, pred_final.assign(id=test_id.cpu().detach().numpy())], ignore_index=True)
 # submission_df.to_csv('submission_self_tuning.csv', index=False)
-submission_df[["id"]  + CONFIG.TRAITS_NAME ].to_csv('submission_model8.csv', index=False)
+submission_df[["id"]  + CONFIG.TRAITS_NAME ].to_csv('submission_swin_with_table_large_224.csv', index=False)
 print("Submit!")
 
 # %%

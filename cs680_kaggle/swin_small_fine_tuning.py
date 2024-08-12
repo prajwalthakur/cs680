@@ -56,11 +56,11 @@ class Config():
     BASE_DIR = os.path.join(os.getcwd() , 'data')
     train_df = pd.read_csv(BASE_DIR  +  '/train.csv')
     TRAIN_VAL_SPLIT_SIZE = 0.06
-    TRAIN_BATCH_SIZE =64
-    VAL_BATCH_SIZE =  64
-    TEST_BATCH_SIZE = 2
+    TRAIN_BATCH_SIZE = 16
+    VAL_BATCH_SIZE  =  16
+    TEST_BATCH_SIZE =  2
     LR_MAX = 1e-4
-    NUM_EPOCHS = 10
+    NUM_EPOCHS = 14
     TIM_NUM_CLASS =6 # 
     NORMALIZE_TARGET = "log_transform_mean_std"   #"log_transform" #
     RANDOM_NUMBER = 42
@@ -246,7 +246,7 @@ CONFIG = Config()
 # %%
 if CONFIG.WANDB_INIT:
     wandb.login()
-    wandb.init(project="cs680v3",group="swin_small_fine_tuning",name="swin_small_fine_tuning",
+    wandb.init(project="cs680v3",group="swin_large_fine_tuning",name="swin_large_fine_tuning",
         config = {
         "LR_max": CONFIG.LR_MAX,
         "WEIGHT_DECAY":CONFIG.WEIGHT_DECAY,
@@ -431,7 +431,7 @@ class ImageBackbone_swinV2(nn.Module):
     def __init__(self, backbone_name, weight_path, out_features, fixed_feature_extractor=None):
         super().__init__()
         self.out_features = out_features
-        self.backbone = timm.create_model('swin_tiny_patch4_window7_224.ms_in22k', pretrained=True, num_classes=out_features) #remove classifier nn.Linear
+        self.backbone = timm.create_model('swin_large_patch4_window7_224.ms_in22k', pretrained=True, num_classes=out_features) #remove classifier nn.Linear
         #self.backbone = backbone_.forward_head(backbone_, pre_logits=True)
         in_features = self.backbone.num_features
         
@@ -643,6 +643,9 @@ def utils_convert_to_2d_tensors(predictions,targets):
     targets  = np.reshape(targets  , (-1 , targets.shape[-1]))
     return torch.Tensor(predictions), torch.Tensor(targets)
 
+
+MODEL_NAME_SAVE = 'swin_large_fine_tuning_train.pth'
+best_model_callback_train = BestModelSaveCallback(save_path=os.path.join(CONFIG.BASE_DIR,MODEL_NAME_SAVE))
 def train(trainLoader,valLoader,model,num_epochs,best_model_callback):
     #wandb.watch(model,loss_function,log = "all",log_freq=50)
     
@@ -659,10 +662,11 @@ def train(trainLoader,valLoader,model,num_epochs,best_model_callback):
         R2sc.reset()
         LOSS.reset()
         # batch training loss
+        train_r2 =  -9
         with tqdm.tqdm(total=len(trainLoader)) as trainingLoop:
             for index,batch in enumerate(iter(trainLoader)): 
         
-                loss,mse_ , r2_ = train_batch(batch,model)
+                loss,mse_ , train_r2 = train_batch(batch,model)
                 # train_loss_current_epoch.append(loss)
                 # train_mse_current_epoch.append(mse_)
                 # train_r2_current_epoch.append(r2_)
@@ -672,7 +676,7 @@ def train(trainLoader,valLoader,model,num_epochs,best_model_callback):
                 # trainingLoop.set_postfix({ "Training batch" : index , "loss is" : loss , "MSE" :  mse_ , "R2":  r2_, "lr was":  LR_SCHEDULER.get_last_lr()[0] })
                 # trainingLoop.update(1)
                 if CONFIG.WANDB_INIT:
-                    wandb.log({"Training-Loss":loss  , "Training-MSE" :  mse_ , "Training-R2":  r2_ })
+                    wandb.log({"Training-Loss":loss  , "Training-MSE" :  mse_ , "Training-R2":  train_r2 })
         
         # train_epoch_loss.append(np.array(train_loss_current_epoch).mean() )
         # train_epoch_r2.append(np.array(train_r2_current_epoch).mean())
@@ -699,7 +703,7 @@ def train(trainLoader,valLoader,model,num_epochs,best_model_callback):
                 wandb.log({"Validation-Loss":loss  , "Validation-MSE" :  mse_ , "Validation-R2":  val_r2 })
         
         best_model_callback(val_r2,model)        # save the best model according to the validation accuracy
-        
+        best_model_callback_train(train_r2,model)
         
     return train_epoch_loss,val_epoch_loss,train_epoch_r2 , val_epoch_r2
 
@@ -709,7 +713,7 @@ def train(trainLoader,valLoader,model,num_epochs,best_model_callback):
 
 
 # %%
-MODEL_NAME_SAVE = 'swin_small_fine_tuning.pth'
+MODEL_NAME_SAVE = 'swin_large_fine_tuning_Val.pth'
 best_model_callback = BestModelSaveCallback(save_path=os.path.join(CONFIG.BASE_DIR,MODEL_NAME_SAVE))
 train_losses, val_losses , train_accuracies,val_accuracies = train(train_dataloader,validation_dataloader,model,CONFIG.NUM_EPOCHS,best_model_callback)
 
