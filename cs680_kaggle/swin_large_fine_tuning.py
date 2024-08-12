@@ -43,8 +43,8 @@ torch.manual_seed(RANDOM_NUMBER)
 # # select Device
 
 # %%
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else  "cpu") #"cuda:1" if torch.cuda.is_available() else 
-# torch.cuda.set_per_process_memory_fraction(0.95, device=DEVICE)
+DEVICE = torch.device("cuda:1" if torch.cuda.is_available() else  "cpu") #"cuda:1" if torch.cuda.is_available() else 
+torch.cuda.set_per_process_memory_fraction(0.99, device=DEVICE)
 torch.cuda.empty_cache()
 
 # %%
@@ -56,11 +56,11 @@ class Config():
     BASE_DIR = os.path.join(os.getcwd() , 'data')
     train_df = pd.read_csv(BASE_DIR  +  '/train.csv')
     TRAIN_VAL_SPLIT_SIZE = 0.06
-    TRAIN_BATCH_SIZE =64
-    VAL_BATCH_SIZE =  64
+    TRAIN_BATCH_SIZE = 16
+    VAL_BATCH_SIZE =  16
     TEST_BATCH_SIZE = 2
     LR_MAX = 1e-4
-    NUM_EPOCHS = 10
+    NUM_EPOCHS = 20
     TIM_NUM_CLASS =6 # 
     NORMALIZE_TARGET = "log_transform_mean_std"   #"log_transform" #
     RANDOM_NUMBER = 42
@@ -69,7 +69,7 @@ class Config():
     TRAITS_NAME = ['X4_mean', 'X11_mean', 'X18_mean', 'X26_mean', 'X50_mean', 'X3112_mean' ]
     FOLD = 0 # Which fold to set as validation data
     IMAGE_SIZE =128
-    TARGET_IMAGE_SIZE =  224
+    TARGET_IMAGE_SIZE =  384
     T_MAX =        9
     LR_MODE = "step" # LR scheduler mode from one of "cos", "step", "exp"
     torch.manual_seed(RANDOM_NUMBER)
@@ -246,7 +246,7 @@ CONFIG = Config()
 # %%
 if CONFIG.WANDB_INIT:
     wandb.login()
-    wandb.init(project="cs680v3",group="swin_small_fine_tuning",name="swin_small_fine_tuning",
+    wandb.init(project="cs680v3",group="swin_large_fine_tuning",name="swin_large_384_fine_tuning_continue_from_model_8",
         config = {
         "LR_max": CONFIG.LR_MAX,
         "WEIGHT_DECAY":CONFIG.WEIGHT_DECAY,
@@ -431,7 +431,8 @@ class ImageBackbone_swinV2(nn.Module):
     def __init__(self, backbone_name, weight_path, out_features, fixed_feature_extractor=None):
         super().__init__()
         self.out_features = out_features
-        self.backbone = timm.create_model('swin_tiny_patch4_window7_224.ms_in22k', pretrained=True, num_classes=out_features) #remove classifier nn.Linear
+        self.backbone = timm.create_model('swin_large_patch4_window12_384.ms_in22k_ft_in1k', pretrained=True, num_classes=out_features) #remove classifier nn.Linear
+        self.backbone.load_state_dict(torch.load('/home/prajwal/cs680/cs680_kaggle/data/model_08.pth'))
         #self.backbone = backbone_.forward_head(backbone_, pre_logits=True)
         in_features = self.backbone.num_features
         
@@ -491,7 +492,7 @@ class BestModelSaveCallback:
                     #pred_final["id"] = test_id.cpu().detach().numpy()
                     submission_df = pd.concat([submission_df, pred_final.assign(id=test_id.cpu().detach().numpy())], ignore_index=True)
             # submission_df.to_csv('submission_self_tuning.csv', index=False)
-            submission_df[["id"]  + CONFIG.TRAITS_NAME ].to_csv('swin_small_fine_tuning.csv', index=False)
+            submission_df[["id"]  + CONFIG.TRAITS_NAME ].to_csv('swin_large384_fine_tuning.csv', index=False)
             print("Submit!")
             
             
@@ -643,6 +644,9 @@ def utils_convert_to_2d_tensors(predictions,targets):
     targets  = np.reshape(targets  , (-1 , targets.shape[-1]))
     return torch.Tensor(predictions), torch.Tensor(targets)
 
+
+MODEL_NAME_SAVE = 'swin_large_384_fine_tuning_train.pth'
+best_model_callback_train = BestModelSaveCallback(save_path=os.path.join(CONFIG.BASE_DIR,MODEL_NAME_SAVE))
 def train(trainLoader,valLoader,model,num_epochs,best_model_callback):
     #wandb.watch(model,loss_function,log = "all",log_freq=50)
     
@@ -659,10 +663,11 @@ def train(trainLoader,valLoader,model,num_epochs,best_model_callback):
         R2sc.reset()
         LOSS.reset()
         # batch training loss
+        train_r2 = -9 
         with tqdm.tqdm(total=len(trainLoader)) as trainingLoop:
             for index,batch in enumerate(iter(trainLoader)): 
         
-                loss,mse_ , r2_ = train_batch(batch,model)
+                loss,mse_ , train_r2 = train_batch(batch,model)
                 # train_loss_current_epoch.append(loss)
                 # train_mse_current_epoch.append(mse_)
                 # train_r2_current_epoch.append(r2_)
@@ -672,7 +677,7 @@ def train(trainLoader,valLoader,model,num_epochs,best_model_callback):
                 # trainingLoop.set_postfix({ "Training batch" : index , "loss is" : loss , "MSE" :  mse_ , "R2":  r2_, "lr was":  LR_SCHEDULER.get_last_lr()[0] })
                 # trainingLoop.update(1)
                 if CONFIG.WANDB_INIT:
-                    wandb.log({"Training-Loss":loss  , "Training-MSE" :  mse_ , "Training-R2":  r2_ })
+                    wandb.log({"Training-Loss":loss  , "Training-MSE" :  mse_ , "Training-R2":  train_r2 })
         
         # train_epoch_loss.append(np.array(train_loss_current_epoch).mean() )
         # train_epoch_r2.append(np.array(train_r2_current_epoch).mean())
@@ -699,8 +704,7 @@ def train(trainLoader,valLoader,model,num_epochs,best_model_callback):
                 wandb.log({"Validation-Loss":loss  , "Validation-MSE" :  mse_ , "Validation-R2":  val_r2 })
         
         best_model_callback(val_r2,model)        # save the best model according to the validation accuracy
-        
-        
+        best_model_callback_train(train_r2,model)
     return train_epoch_loss,val_epoch_loss,train_epoch_r2 , val_epoch_r2
 
 
@@ -709,7 +713,7 @@ def train(trainLoader,valLoader,model,num_epochs,best_model_callback):
 
 
 # %%
-MODEL_NAME_SAVE = 'swin_small_fine_tuning.pth'
+MODEL_NAME_SAVE = 'swin_large_384_fine_tuning.pth'
 best_model_callback = BestModelSaveCallback(save_path=os.path.join(CONFIG.BASE_DIR,MODEL_NAME_SAVE))
 train_losses, val_losses , train_accuracies,val_accuracies = train(train_dataloader,validation_dataloader,model,CONFIG.NUM_EPOCHS,best_model_callback)
 
@@ -739,7 +743,7 @@ for index , batch in tqdm.tqdm(enumerate(iter(test_dataloader))):
         #pred_final["id"] = test_id.cpu().detach().numpy()
         submission_df = pd.concat([submission_df, pred_final.assign(id=test_id.cpu().detach().numpy())], ignore_index=True)
 # submission_df.to_csv('submission_self_tuning.csv', index=False)
-submission_df[["id"]  + CONFIG.TRAITS_NAME ].to_csv('swin_small_fine_tuning.csv', index=False)
+submission_df[["id"]  + CONFIG.TRAITS_NAME ].to_csv('dino_large_384_fine_tuning.csv', index=False)
 print("Submit!")
 
 
